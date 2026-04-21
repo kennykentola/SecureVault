@@ -75,57 +75,54 @@ export const StatusViewer: React.FC<StatusViewerProps> = ({
             // if it's "MY" status, we use our own key.
             
             let statusKey: CryptoKey | null = null;
+            const isOwner = status.user_id === user.$id || status.owner_id === user.$id;
             
-            // Fetch encrypted status key shared with US (works for self too)
-            try {
-                if (!privateKey) throw new Error("VAULT_LOCKED");
-
-                const keyRes = await databases.listDocuments(
-                    APPWRITE_CONFIG.DATABASE_ID, 
-                    "status_keys", 
-                    [
-                        Query.equal('owner_id', status.user_id),
-                        Query.equal('recipient_id', user.$id),
-                        Query.orderDesc('created_at'),
-                        Query.limit(1)
-                    ]
-                );
-                
-                if (keyRes.documents.length > 0) {
-                    const encryptedSharedKey = keyRes.documents[0].encrypted_key;
-                    const decryptedSharedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(
-                        encryptedSharedKey, 
-                        privateKey
-                    );
-                    statusKey = await KeyManager.importSecretKey(decryptedSharedKeyB64);
-                } else if (status.user_id === user.$id || status.owner_id === user.$id) {
-                    // Fallback to local key ONLY for self-statuses if shared record missing
-                    console.log("[Security] Poster detected. Using local status key.");
+            // 1. If we are the owner, prioritize using our local status key directly
+            if (isOwner) {
+                try {
+                    console.log("[Security] Owner detected. Retrieving local status key.");
                     statusKey = await KeyManager.getStatusKey();
+                } catch (e) {
+                    console.warn("[Security] Local status key recovery failed, will attempt shared record check.", e);
                 }
+            }
 
-                if (!statusKey) {
-                    throw new Error("No shared key found or vault locked.");
-                }
-            } catch (err: any) {
-                console.error("Failed to retrieve status security key", err);
-                if (err.message === "VAULT_LOCKED") {
-                    setDecryptedContent({ text: "Vault Locked: Unlock to decrypt intelligence." });
-                    setIsLoading(false);
-                    return;
-                }
-                
-                // Final posters-only fallback check
-                if (status.user_id === user.$id || status.owner_id === user.$id) {
-                     console.log("[Security] Emergency poster fallback triggered.");
-                     try {
-                         statusKey = await KeyManager.getStatusKey();
-                     } catch(e) { console.error("Emergency key recovery failed", e); }
+            // 2. Fetch encrypted status key shared with US (works for self too if local key missing)
+            if (!statusKey) {
+                try {
+                    if (!privateKey) throw new Error("VAULT_LOCKED");
+
+                    const keyRes = await databases.listDocuments(
+                        APPWRITE_CONFIG.DATABASE_ID, 
+                        "status_keys", 
+                        [
+                            Query.equal('owner_id', status.user_id),
+                            Query.equal('recipient_id', user.$id),
+                            Query.orderDesc('created_at'),
+                            Query.limit(1)
+                        ]
+                    );
+                    
+                    if (keyRes.documents.length > 0) {
+                        const encryptedSharedKey = keyRes.documents[0].encrypted_key;
+                        const decryptedSharedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(
+                            encryptedSharedKey, 
+                            privateKey
+                        );
+                        statusKey = await KeyManager.importSecretKey(decryptedSharedKeyB64);
+                    }
+                } catch (err: any) {
+                    console.error("Failed to retrieve shared status key", err);
+                    if (err.message === "VAULT_LOCKED") {
+                        setDecryptedContent({ text: "Vault Locked: Unlock to decrypt intelligence." });
+                        setIsLoading(false);
+                        return;
+                    }
                 }
             }
 
             if (!statusKey) {
-                 setDecryptedContent({ text: "Agent: Decryption protocol failed (Key Missing)." });
+                 setDecryptedContent({ text: "Agent: Decryption protocol failed (Key Not Shared or Missing)." });
                  setIsLoading(false);
                  return;
             }

@@ -91,6 +91,14 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
                 const statusKeyExported = await KeyManager.exportSecretKey(statusKey);
                 const viewers = availableContacts.filter(c => !excludedUsers.includes(c.user_id));
                 
+                // Fetch current user's full profile to get public key for self-sharing
+                const selfProfileRes = await databases.listDocuments(
+                    APPWRITE_CONFIG.DATABASE_ID, 
+                    APPWRITE_CONFIG.COLLECTION_USERS, 
+                    [Query.equal("user_id", user?.$id)]
+                );
+                const selfProfile = selfProfileRes.documents[0];
+
                 await Promise.all(viewers.map(async (viewer) => {
                     if (viewer.public_key) {
                         try {
@@ -110,13 +118,17 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
                 }));
 
                 // Also share with self so we can view it
-                const selfPublicKey = await KeyManager.importPublicKey(JSON.parse(user.public_key));
-                await databases.createDocument(APPWRITE_CONFIG.DATABASE_ID, "status_keys", ID.unique(), {
-                    owner_id: user?.$id,
-                    recipient_id: user?.$id,
-                    encrypted_key: await HybridEncryptor.encryptKeyWithRSA(statusKeyExported, selfPublicKey),
-                    created_at: new Date().toISOString()
-                });
+                if (selfProfile?.public_key) {
+                    const selfPublicKey = await KeyManager.importPublicKey(JSON.parse(selfProfile.public_key));
+                    await databases.createDocument(APPWRITE_CONFIG.DATABASE_ID, "status_keys", ID.unique(), {
+                        owner_id: user?.$id,
+                        recipient_id: user?.$id,
+                        encrypted_key: await HybridEncryptor.encryptKeyWithRSA(statusKeyExported, selfPublicKey),
+                        created_at: new Date().toISOString()
+                    });
+                } else {
+                    console.warn("[Security] Self public key missing. Skipping self-key-sharing.");
+                }
 
             } catch (kErr) {
                 console.error("Key sharing failed", kErr);
