@@ -34,7 +34,7 @@ Our security is based on a **Hybrid Cryptography** flow:
 - **Voice Messages**: Record and transmit encrypted voice notes.
 - **Crypto Visualizer**: A specialized panel to inspect the math (Plaintext, Ciphertext, Hash) of every message.
 - **Admin Dashboard**: Zero-knowledge moderation (block/delete users, view stats).
-- **Security PIN**: WhatsApp-style secondary authentication for local key access.
+- **Security PIN**:  secondary authentication for local key access.
 
 ---
 
