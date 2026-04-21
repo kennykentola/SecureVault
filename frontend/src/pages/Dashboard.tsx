@@ -1405,7 +1405,7 @@ export const Dashboard: React.FC = () => {
                                     className="flex items-center gap-4 cursor-pointer group"
                                     onClick={() => setShowProfilePanel(true)}
                                 >
-                                    <div className="w-12 h-12 rounded-2xl bg-slate-200 border border-slate-300 overflow-hidden shadow-sm group-hover:scale-105 transition-transform">
+                                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-slate-200 border border-slate-300 overflow-hidden shadow-sm group-hover:scale-105 transition-transform">
                                         {selectedChat.avatar_id ? (
                                             <img src={getUserAvatar(selectedChat.avatar_id)} alt="" className="w-full h-full object-cover" />
                                         ) : (
@@ -1414,19 +1414,20 @@ export const Dashboard: React.FC = () => {
                                             </div>
                                         )}
                                     </div>
-                                    <div className="flex flex-col">
-                                        <h3 className="font-bold tracking-tight text-slate-800 group-hover:text-blue-600 transition-colors leading-tight">
+                                    <div className="flex flex-col min-w-0">
+                                        <h3 className="font-bold tracking-tight text-slate-800 group-hover:text-blue-600 transition-colors leading-tight truncate max-w-[80px] sm:max-w-[150px]">
                                             {selectedChat.username || selectedChat.name}
                                         </h3>
                                         <div className="flex items-center gap-2">
                                             {typingUsers.length > 0 ? (
-                                                <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest animate-pulse">
-                                                    {typingUsers.length > 1 ? `${typingUsers.length} are typing...` : `${typingUsers[0]} is typing...`}
+                                                <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest animate-pulse truncate">
+                                                    {typingUsers.length > 1 ? `${typingUsers.length} typing` : `${typingUsers[0]} typing`}
                                                 </span>
                                             ) : (
                                                 <div className="flex items-center gap-1.5 text-blue-600/60">
-                                                    <LockIcon className="w-3 h-3" />
-                                                    <span className="text-[10px] font-bold uppercase tracking-widest">End-to-End Encrypted</span>
+                                                    <LockIcon className="w-2.5 h-2.5" />
+                                                    <span className="text-[9px] font-bold uppercase tracking-widest hidden sm:inline">End-to-End Encrypted</span>
+                                                    <span className="text-[9px] font-bold uppercase tracking-widest sm:hidden">Secure</span>
                                                 </div>
                                             )}
                                         </div>
@@ -1470,9 +1471,9 @@ export const Dashboard: React.FC = () => {
                                 {selectedChat.type === 'group' && (
                                     <button onClick={() => setShowAddMember(true)} className="p-2.5 md:p-3 bg-indigo-50 hover:bg-indigo-100 rounded-2xl transition-all text-indigo-600"><Plus className="w-5 h-5" /></button>
                                 )}
-                                <button onClick={() => startCall(selectedChat.user_id || selectedChat.$id, 'voice')} className="flex p-2.5 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Phone className="w-5 h-5" /></button>
-                                <button onClick={() => startCall(selectedChat.user_id || selectedChat.$id, 'video')} className="flex p-2.5 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Video className="w-5 h-5" /></button>
-                                <button onClick={() => setShowGroupDetail(true)} className="p-2.5 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><MoreVertical className="w-5 h-5" /></button>
+                                <button onClick={() => startCall(selectedChat.user_id || selectedChat.$id, 'voice')} className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Phone className="w-4 h-4 md:w-5 md:h-5" /></button>
+                                <button onClick={() => startCall(selectedChat.user_id || selectedChat.$id, 'video')} className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Video className="w-4 h-4 md:w-5 md:h-5" /></button>
+                                <button onClick={() => setShowGroupDetail(true)} className="p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><MoreVertical className="w-4 h-4 md:w-5 md:h-5" /></button>
                             </div>
                         </header>
 

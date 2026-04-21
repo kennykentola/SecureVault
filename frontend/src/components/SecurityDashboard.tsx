@@ -52,19 +52,19 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ messages }
                             <div className="flex bg-slate-900 rounded-lg p-1">
                                 <button 
                                     onClick={() => setActiveTab('metrics')}
-                                    className={`px-2 py-1 text-[8px] font-bold rounded-md transition-colors ${activeTab === 'metrics' ? 'bg-primary-600 text-white' : 'text-white/70 hover:text-white bg-white/5 hover:bg-white/10'}`}
+                                    className={`px-2 py-1 text-[8px] font-bold rounded-md transition-colors ${activeTab === 'metrics' ? 'bg-primary-600 text-white' : 'text-white bg-white/10 hover:bg-white/20'}`}
                                 >
                                     Metrics
                                 </button>
                                 <button 
                                     onClick={() => setActiveTab('protocol')}
-                                    className={`px-2 py-1 text-[8px] font-bold rounded-md transition-colors ${activeTab === 'protocol' ? 'bg-primary-600 text-white' : 'text-white/70 hover:text-white bg-white/5 hover:bg-white/10'}`}
+                                    className={`px-2 py-1 text-[8px] font-bold rounded-md transition-colors ${activeTab === 'protocol' ? 'bg-primary-600 text-white' : 'text-white bg-white/10 hover:bg-white/20'}`}
                                 >
                                     Protocol
                                 </button>
                                 <button 
                                     onClick={() => setActiveTab('mitm')}
-                                    className={`px-2 py-1 text-[8px] font-bold rounded-md transition-colors ${activeTab === 'mitm' ? 'bg-red-600 text-white' : 'text-white/70 hover:text-white bg-white/5 hover:bg-white/10'}`}
+                                    className={`px-2 py-1 text-[8px] font-bold rounded-md transition-colors ${activeTab === 'mitm' ? 'bg-red-600 text-white' : 'text-white bg-white/10 hover:bg-white/20'}`}
                                 >
                                     MITM
                                 </button>
