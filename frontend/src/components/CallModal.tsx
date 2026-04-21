@@ -12,20 +12,19 @@ interface CallModalProps {
 }
 
 export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd }) => {
-    const localVideoRef = useRef<HTMLVideoElement>(null);
-    const remoteVideoRef = useRef<HTMLVideoElement>(null);
-
-    useEffect(() => {
-        if (localVideoRef.current && callState.localStream) {
-            localVideoRef.current.srcObject = callState.localStream;
+    const handleLocalVideoRef = (el: HTMLVideoElement | null) => {
+        if (el && callState.localStream) {
+            el.srcObject = callState.localStream;
+            el.play().catch(e => console.warn("Local video playback failed", e));
         }
-    }, [callState.localStream]);
+    };
 
-    useEffect(() => {
-        if (remoteVideoRef.current && callState.remoteStream) {
-            remoteVideoRef.current.srcObject = callState.remoteStream;
+    const handleRemoteVideoRef = (el: HTMLVideoElement | null) => {
+        if (el && callState.remoteStream) {
+            el.srcObject = callState.remoteStream;
+            el.play().catch(e => console.warn("Remote video playback failed", e));
         }
-    }, [callState.remoteStream]);
+    };
 
     if (!callState.isIncoming && !callState.isOutgoing && !callState.isActive) return null;
 
@@ -59,7 +58,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                             <>
                                 <div className="hidden md:flex items-center gap-2 mr-4 bg-black/20 rounded-xl p-1 pr-3">
                                     <div className="w-16 aspect-video bg-black rounded-lg overflow-hidden border border-white/10">
-                                        <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
+                                        <video ref={handleLocalVideoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
                                     </div>
                                     <span className="text-[9px] font-bold text-white/50 uppercase">You</span>
                                 </div>
@@ -93,13 +92,15 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                         className="p-4 pt-0"
                     >
                         <div className="w-full max-w-sm ml-auto aspect-video bg-black rounded-2xl overflow-hidden border border-white/20 shadow-2xl relative">
-                            <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                            <video ref={handleRemoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
                             <div className="absolute bottom-3 left-3 px-2 py-1 bg-black/40 backdrop-blur-md rounded-lg border border-white/10">
                                 <p className="text-[9px] font-black text-white uppercase tracking-widest">{callState.caller}</p>
                             </div>
                         </div>
                     </motion.div>
                 )}
+                {/* Hidden Audio for Voice and Video Sync */}
+                <audio ref={handleRemoteVideoRef} autoPlay playsInline />
             </motion.div>
         </AnimatePresence>
     );

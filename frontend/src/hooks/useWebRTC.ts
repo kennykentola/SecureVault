@@ -31,7 +31,16 @@ export const useWebRTC = (userId: string | undefined) => {
     useEffect(() => {
         if (!userId) return;
 
-        const newPeer = new Peer(userId);
+        const newPeer = new Peer(userId, {
+            debug: 3,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                ]
+            }
+        });
 
         newPeer.on('open', (id) => {
             console.log('Peer connected with ID:', id);
@@ -80,8 +89,9 @@ export const useWebRTC = (userId: string | undefined) => {
 
             call.on('close', () => endCall());
             currentCall.current = call;
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to get local stream', err);
+            alert(`Call failed: Access to camera/microphone denied or failed. (${err.message})`);
         }
     }, [peer]);
 
@@ -107,8 +117,9 @@ export const useWebRTC = (userId: string | undefined) => {
             });
 
             currentCall.current.on('close', () => endCall());
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to get local stream', err);
+            alert(`Call failed: Access to camera/microphone denied or failed. (${err.message})`);
         }
     }, [callState.callType]);
 
