@@ -1629,6 +1629,12 @@ const isLink = searchText.includes("http");
                             </div>
                             
                             <div className="flex items-center gap-1">
+                                <button 
+                                    onClick={() => setShowMonitor(!showMonitor)}
+                                    className={`p-2 rounded-lg transition-all ${showMonitor ? 'text-primary-600 bg-primary-50' : 'text-slate-600 hover:bg-slate-100'}`}
+                                >
+                                    <Activity className="w-5 h-5" />
+                                </button>
                                 <div className="relative">
                                     <button onClick={() => setShowTopMenu(!showTopMenu)} className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-600">
                                         <MoreVertical className="w-5 h-5" />
@@ -1691,13 +1697,19 @@ const isLink = searchText.includes("http");
                 <AnimatePresence>
                     {showMonitor && (
                         <motion.div 
-                            initial={{ width: 0, opacity: 0 }}
-                            animate={{ width: 400, opacity: 1 }}
-                            exit={{ width: 0, opacity: 0 }}
-                            className="h-full bg-slate-900 border-l border-slate-800 flex flex-col shrink-0 overflow-hidden relative z-30"
+                            initial={{ x: '100%', opacity: 0 }}
+                            animate={{ x: 0, opacity: 1 }}
+                            exit={{ x: '100%', opacity: 0 }}
+                            className="fixed md:relative inset-y-0 right-0 w-full md:w-[400px] bg-slate-900 border-l border-slate-800 flex flex-col shrink-0 overflow-hidden z-50 md:z-30 shadow-2xl md:shadow-none"
                         >
                             <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/80 backdrop-blur-md">
                                 <div className="flex items-center gap-3">
+                                    <button 
+                                        onClick={() => setShowMonitor(false)}
+                                        className="md:hidden p-2 -ml-2 hover:bg-white/10 rounded-full transition-colors text-slate-400"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
                                     <div className="w-8 h-8 rounded-lg bg-primary-600/20 flex items-center justify-center">
                                         <Terminal className="w-4 h-4 text-primary-400" />
                                     </div>
