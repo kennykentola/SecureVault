@@ -1,0 +1,374 @@
+@import "tailwindcss";
+
+:root {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+  --accent: #22c55e;
+}
+
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+  --accent: #22c55e;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #21262d;
+  --text-primary: #f0f6fc;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --border-color: #30363d;
+  --accent: #238636;
+}
+
+[data-theme="blue"] {
+  --bg-primary: #eff6ff;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #dbeafe;
+  --text-primary: #1e3a8a;
+  --text-secondary: #1e40af;
+  --text-muted: #3b82f6;
+  --border-color: #bfdbfe;
+  --accent: #3b82f6;
+}
+
+[data-theme="purple"] {
+  --bg-primary: #faf5ff;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f3e8ff;
+  --text-primary: #581c87;
+  --text-secondary: #6b21a8;
+  --text-muted: #9333ea;
+  --border-color: #e9d5ff;
+  --accent: #9333ea;
+}
+
+[data-theme="lemon"] {
+  --bg-primary: #fefce8;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #fef9c3;
+  --text-primary: #713f12;
+  --text-secondary: #a16207;
+  --text-muted: #eab308;
+  --border-color: #fef08a;
+  --accent: #eab308;
+}
+
+[data-theme="rose"] {
+  --bg-primary: #fff1f2;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #ffe4e6;
+  --text-primary: #881337;
+  --text-secondary: #9f1239;
+  --text-muted: #e11d48;
+  --border-color: #fecdd3;
+  --accent: #e11d48;
+}
+
+[data-theme="mint"] {
+  --bg-primary: #ecfdf5;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #d1fae5;
+  --text-primary: #064e3b;
+  --text-secondary: #047857;
+  --text-muted: #10b981;
+  --border-color: #a7f3d0;
+  --accent: #10b981;
+}
+
+[data-theme="orange"] {
+  --bg-primary: #fff7ed;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #ffedd5;
+  --text-primary: #7c2d12;
+  --text-secondary: #c2410c;
+  --text-muted: #f97316;
+  --border-color: #fed7aa;
+  --accent: #f97316;
+}
+
+[data-theme="cyan"] {
+  --bg-primary: #ecfeff;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #cffafe;
+  --text-primary: #164e63;
+  --text-secondary: #0e7490;
+  --text-muted: #06b6d4;
+  --border-color: #a5f3fc;
+  --accent: #06b6d4;
+}
+
+[data-theme="teal"] {
+  --bg-primary: #f0fdfa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #ccfbf1;
+  --text-primary: #134e4a;
+  --text-secondary: #0d9488;
+  --text-muted: #14b8a6;
+  --border-color: #99f6e4;
+  --accent: #14b8a6;
+}
+
+[data-theme="indigo"] {
+  --bg-primary: #eef2ff;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #e0e7ff;
+  --text-primary: #312e81;
+  --text-secondary: #4338ca;
+  --text-muted: #6366f1;
+  --border-color: #c7d2fe;
+  --accent: #6366f1;
+}
+
+[data-theme="pink"] {
+  --bg-primary: #fdf2f8;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #fce7f3;
+  --text-primary: #831843;
+  --text-secondary: #be185d;
+  --text-muted: #ec4899;
+  --border-color: #fbcfe8;
+  --accent: #ec4899;
+}
+
+
+@theme {
+  --color-mint-500: #10b981;
+  --color-mint-400: #34d399;
+  --color-primary-600: #2563eb;
+  --color-primary-500: #3b82f6;
+}
+
+@layer base {
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    @apply antialiased selection:bg-mint-500/30;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color);
+    @apply backdrop-blur-2xl border rounded-3xl;
+  }
+
+  .glass-input {
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color);
+    @apply rounded-2xl py-3 px-4 focus:outline-hidden focus:border-mint-500 transition-all;
+  }
+
+  .btn-primary {
+    @apply bg-linear-to-br from-primary-600 to-mint-500 hover:from-primary-500 hover:to-mint-400 text-white font-bold py-3 px-6 rounded-2xl shadow-lg shadow-mint-500/20 active:scale-95 transition-all;
+  }
+
+  .bg-vault {
+    background: linear-gradient(to bottom right, var(--bg-primary), var(--bg-tertiary));
+    background-attachment: fixed;
+  }
+
+  .vault-overlay {
+    display: none;
+  }
+
+  .glass-panel {
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color);
+    @apply backdrop-blur-3xl border;
+  }
+
+  .glass-sidebar {
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color);
+    @apply backdrop-blur-2xl border-r;
+  }
+
+  .glass-header {
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color);
+    @apply backdrop-blur-xl border-b;
+  }
+
+  .glass-footer {
+    background-color: var(--bg-secondary);
+    border-color: var(--border-color);
+    @apply backdrop-blur-2xl border-t;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: var(--bg-tertiary);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  @apply rounded-full hover:bg-slate-400 transition-colors;
+}
+
+/* Chat Bubbles */
+.message-in {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-color);
+  @apply rounded-2xl rounded-tl-none border;
+}
+
+.message-out {
+  @apply rounded-2xl rounded-tr-none bg-primary-600 border border-mint-500/30 shadow-lg shadow-mint-500/15 text-white;
+}
+
+.message-in p,
+.message-in span {
+  color: var(--text-primary);
+}
+
+.message-out p,
+.message-out span {
+  @apply text-white;
+}
+
+.message-time {
+  color: var(--text-muted);
+}
+
+.contact-name {
+  color: var(--text-primary);
+}
+
+.contact-preview {
+  color: var(--text-secondary);
+}
+
+.input-text {
+  color: var(--text-primary);
+}
+
+.input-text::placeholder {
+  color: var(--text-muted);
+}
+
+.lock-icon {
+  @apply text-primary-600;
+}
+
+.sidebar-contact-name {
+  color: var(--text-primary);
+  @apply font-semibold;
+}
+
+.sidebar-contact-preview {
+  color: var(--text-secondary);
+}
+
+.sidebar-time {
+  color: var(--text-muted);
+  @apply font-medium;
+}
+
+.message-timestamp {
+  color: var(--text-muted);
+}
+
+/* Theme-aware utility overrides */
+.bg-white { background-color: var(--bg-secondary) !important; }
+.bg-slate-50 { background-color: var(--bg-primary) !important; }
+.bg-slate-100 { background-color: var(--bg-tertiary) !important; }
+.bg-slate-200 { background-color: var(--bg-tertiary) !important; }
+
+.text-slate-900 { color: var(--text-primary) !important; }
+.text-slate-800 { color: var(--text-primary) !important; }
+.text-slate-700 { color: var(--text-secondary) !important; }
+.text-slate-600 { color: var(--text-secondary) !important; }
+.text-slate-500 { color: var(--text-primary) !important; }
+.text-slate-400 { color: var(--text-secondary) !important; }
+.text-gray-500 { color: var(--text-primary) !important; }
+.text-gray-600 { color: var(--text-secondary) !important; }
+.text-slate-700 { color: var(--text-secondary) !important; }
+.text-slate-600 { color: var(--text-secondary) !important; }
+.text-slate-500 { color: var(--text-muted) !important; }
+.text-slate-400 { color: var(--text-muted) !important; }
+
+.text-white { color: var(--bg-secondary) !important; }
+
+.border-slate-200 { border-color: var(--border-color) !important; }
+.border-slate-100 { border-color: var(--border-color) !important; }
+.border-gray-200 { border-color: var(--border-color) !important; }
+.border-gray-100 { border-color: var(--border-color) !important; }
+
+.hover\:bg-slate-50:hover { background-color: var(--bg-tertiary) !important; }
+.hover\:bg-slate-100:hover { background-color: var(--bg-tertiary) !important; }
+.hover\:bg-slate-200:hover { background-color: var(--border-color) !important; }
+
+/* Message bubbles */
+.message-in {
+  background-color: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+.message-out {
+  background-color: var(--accent) !important;
+}
+
+/* Input fields */
+input, textarea {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+input::placeholder, textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* Chat area background */
+[class*="overflow-y-auto"] {
+  background-color: transparent !important;
+}
+
+/* Dropdown menus - make text visible */
+div[class*="w-"] button span,
+div[class*="z-"] button {
+  color: var(--text-primary) !important;
+}
