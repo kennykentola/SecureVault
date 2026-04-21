@@ -1470,8 +1470,8 @@ export const Dashboard: React.FC = () => {
                                 {selectedChat.type === 'group' && (
                                     <button onClick={() => setShowAddMember(true)} className="p-2.5 md:p-3 bg-indigo-50 hover:bg-indigo-100 rounded-2xl transition-all text-indigo-600"><Plus className="w-5 h-5" /></button>
                                 )}
-                                <button onClick={() => startCall(selectedChat.user_id || selectedChat.$id, 'voice')} className="hidden md:flex p-2.5 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Phone className="w-5 h-5" /></button>
-                                <button onClick={() => startCall(selectedChat.user_id || selectedChat.$id, 'video')} className="hidden md:flex p-2.5 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Video className="w-5 h-5" /></button>
+                                <button onClick={() => startCall(selectedChat.user_id || selectedChat.$id, 'voice')} className="flex p-2.5 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Phone className="w-5 h-5" /></button>
+                                <button onClick={() => startCall(selectedChat.user_id || selectedChat.$id, 'video')} className="flex p-2.5 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Video className="w-5 h-5" /></button>
                                 <button onClick={() => setShowGroupDetail(true)} className="p-2.5 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><MoreVertical className="w-5 h-5" /></button>
                             </div>
                         </header>
