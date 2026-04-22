@@ -62,8 +62,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const session = await account.get();
             setUser(session);
             console.log("User session found:", session.$id);
-        } catch (e) {
-            console.warn("No active session or network error:", e);
+        } catch (e: any) {
+            const statusCode = e?.code ?? e?.response?.code;
+            if (statusCode === 401) {
+                console.log("No active Appwrite session found.");
+            } else {
+                console.warn("Session check failed:", e);
+            }
             setUser(null);
         } finally {
             setLoading(false);

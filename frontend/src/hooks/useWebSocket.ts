@@ -2,15 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 
 export const useWebSocket = (userId: string | undefined, onMessage: (msg: any) => void) => {
     const ws = useRef<WebSocket | null>(null);
+    const reconnectTimer = useRef<number | null>(null);
     const [status, setStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
     const reconnectAttempts = useRef(0);
     const maxReconnectDelay = 10000;
 
     useEffect(() => {
         if (!userId) return;
+        let shouldReconnect = true;
 
         const connect = () => {
-            if (ws.current?.readyState === WebSocket.OPEN) return;
+            if (!shouldReconnect) return;
+            if (ws.current?.readyState === WebSocket.OPEN || ws.current?.readyState === WebSocket.CONNECTING) return;
             
             setStatus('connecting');
             
@@ -53,6 +56,7 @@ export const useWebSocket = (userId: string | undefined, onMessage: (msg: any) =
 
             socket.onclose = (event) => {
                 setStatus('disconnected');
+                if (!shouldReconnect) return;
                 if (event.code !== 1000 && event.code !== 1001) { // Not a normal closure
                     const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), maxReconnectDelay);
                     console.warn(`WebSocket Disconnected (Code: ${event.code}), retrying in ${delay}ms... (Attempt ${reconnectAttempts.current + 1})`);
@@ -61,7 +65,7 @@ export const useWebSocket = (userId: string | undefined, onMessage: (msg: any) =
                     if (ws.current === socket) ws.current = null;
                     
                     reconnectAttempts.current++;
-                    setTimeout(() => {
+                    reconnectTimer.current = window.setTimeout(() => {
                         connect();
                     }, delay);
                 }
@@ -76,8 +80,21 @@ export const useWebSocket = (userId: string | undefined, onMessage: (msg: any) =
         };
 
         connect();
+        
+        // Heartbeat to keep connection alive on cloud platforms (Render/Heroku)
+        const heartbeat = setInterval(() => {
+            if (ws.current?.readyState === WebSocket.OPEN) {
+                ws.current.send(JSON.stringify({ type: 'ping', timestamp: new Date().toISOString() }));
+            }
+        }, 30000);
 
         return () => {
+            shouldReconnect = false;
+            clearInterval(heartbeat);
+            if (reconnectTimer.current) {
+                window.clearTimeout(reconnectTimer.current);
+                reconnectTimer.current = null;
+            }
             if (ws.current) {
                 ws.current.onclose = null; // Prevent reconnect on intentional unmount
                 ws.current.close(1000);
@@ -96,4 +113,3 @@ export const useWebSocket = (userId: string | undefined, onMessage: (msg: any) =
 
     return { status, sendMessage };
 };
-

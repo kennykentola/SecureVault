@@ -1,7 +1,7 @@
 import os
 import json
 import asyncio
-from typing import Dict, List
+from typing import Any, Dict, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -40,6 +40,75 @@ try:
     print("Appwrite Client initialized successfully.")
 except Exception as e:
     print(f"Appwrite Client initialization failed: {e}")
+
+
+def get_value(source: Any, *keys: str):
+    if isinstance(source, dict):
+        for key in keys:
+            value = source.get(key)
+            if value is not None:
+                return value
+        return None
+
+    for key in keys:
+        value = getattr(source, key, None)
+        if value is not None:
+            return value
+    return None
+
+
+def get_document_id(document: Any) -> Optional[str]:
+    return get_value(document, "$id", "id")
+
+
+def get_recipient_id(message: dict) -> Optional[str]:
+    return message.get("recipient_id") or message.get("recipientId")
+
+
+def get_group_id(message: dict) -> Optional[str]:
+    return message.get("group_id") or message.get("groupId")
+
+
+def build_outbound_message(
+    message: dict,
+    sender_id: str,
+    recipient_id: Optional[str] = None,
+    message_id: Optional[str] = None,
+    is_group: Optional[bool] = None,
+) -> dict:
+    outbound = dict(message)
+    outbound["sender_id"] = sender_id
+
+    normalized_recipient = recipient_id or get_recipient_id(outbound)
+    if normalized_recipient:
+        outbound["recipient_id"] = normalized_recipient
+        outbound["recipientId"] = normalized_recipient
+
+    if message_id:
+        outbound["$id"] = message_id
+        outbound.setdefault("messageId", message_id)
+
+    if is_group is not None:
+        outbound["is_group"] = is_group
+
+    return outbound
+
+
+def recipient_is_group(message: dict, recipient_id: Optional[str]) -> bool:
+    if isinstance(message.get("is_group"), bool):
+        return message["is_group"]
+
+    if not recipient_id:
+        return False
+
+    if recipient_id.startswith("group:"):
+        return True
+
+    try:
+        databases.get_document(APPWRITE_DATABASE_ID, "groups", recipient_id)
+        return True
+    except Exception:
+        return False
 
 app = FastAPI(title="SecureVault E2EE Backend")
 
@@ -95,25 +164,47 @@ class ConnectionManager:
             print(f"Failed to update status for {user_id}: {e}")
 
     async def connect(self, user_id: str, websocket: WebSocket):
+        existing = self.active_connections.get(user_id)
+        if existing and existing is not websocket:
+            try:
+                await existing.close(code=1000)
+            except Exception:
+                pass
+
         await websocket.accept()
         self.active_connections[user_id] = websocket
         # Run database status update in background to not block the handshake
         asyncio.create_task(self.update_user_status(user_id, "online"))
         print(f"User {user_id} connected")
 
-    async def disconnect(self, user_id: str):
-        if user_id in self.active_connections:
-            del self.active_connections[user_id]
-            asyncio.create_task(self.update_user_status(user_id, "offline"))
-            print(f"User {user_id} disconnected")
+    async def disconnect(self, user_id: str, websocket: Optional[WebSocket] = None):
+        current = self.active_connections.get(user_id)
+        if not current:
+            return
+
+        if websocket is not None and current is not websocket:
+            return
+
+        del self.active_connections[user_id]
+        asyncio.create_task(self.update_user_status(user_id, "offline"))
+        print(f"User {user_id} disconnected")
 
     async def send_personal_message(self, message: dict, recipient_id: str):
-        if recipient_id in self.active_connections:
+        connection = self.active_connections.get(recipient_id)
+        if not connection:
+            return False
+
+        try:
+            await connection.send_text(json.dumps(message))
+            return True
+        except Exception as e:
+            print(f"[WS Send Error] Failed to deliver to {recipient_id}: {e}")
+            await self.disconnect(recipient_id, connection)
             try:
-                await self.active_connections[recipient_id].send_text(json.dumps(message))
-                return True
-            except:
-                return False
+                await connection.close(code=1011)
+            except Exception:
+                pass
+            return False
         return False
 
     async def broadcast_to_group(self, message: dict, group_id: str, sender_id: str):
@@ -125,17 +216,15 @@ class ConnectionManager:
                 [Query.equal("group_id", group_id)]
             )
             
+            delivered = False
+
             # 2. Send to all online members except sender
             for member in members_res.documents:
-                member_user_id = None
-                if isinstance(member, dict):
-                    member_user_id = member.get('user_id')
-                else:
-                    member_user_id = getattr(member, 'user_id', None)
+                member_user_id = get_value(member, "user_id")
                 
                 if member_user_id and member_user_id != sender_id:
-                    await self.send_personal_message(message, member_user_id)
-            return True
+                    delivered = await self.send_personal_message(message, member_user_id) or delivered
+            return delivered
         except Exception as e:
             print(f"Group broadcast error: {e}")
             return False
@@ -161,26 +250,20 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     
                 msg = json.loads(data)
                 msg_type = msg.get("type")
+                
+                # Handle Keep-Alive Ping
+                if msg_type == "ping":
+                    await websocket.send_text(json.dumps({"type": "pong", "timestamp": msg.get("timestamp")}))
+                    continue
+
                 print(f"[WS Inbound] {user_id}: {msg_type}")
                 
-                recipient_id = msg.get("recipient_id") or msg.get("recipientId")
+                recipient_id = get_recipient_id(msg)
                 payload = msg.get("payload")
                 
                 # 1. Handle Chat Messages (Direct & Group)
-                if msg_type == "chat" and recipient_id and payload:
-                    # Identify if recipient is a group
-                    is_group = False
-                    try:
-                        # Optimization: Groups start with a specific prefix or we check DB
-                        if recipient_id.startswith('group:'): # Example optimization
-                            is_group = True
-                        else:
-                            try:
-                                databases.get_document(APPWRITE_DATABASE_ID, "groups", recipient_id)
-                                is_group = True
-                            except: pass
-                    except Exception as e:
-                        print(f"[WS Error] Group check failed: {e}")
+                if msg_type == "chat" and recipient_id and isinstance(payload, dict):
+                    is_group = recipient_is_group(msg, recipient_id)
 
                     # Handle Dual-Key wrapping for Sender-Access
                     enc_key = payload.get("encryptedKey", "")
@@ -203,38 +286,53 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                         "iv": payload.get("iv", ""),
                         "hash": payload.get("hash", ""),
                         "timestamp": payload.get("timestamp", ""),
-                        "type": payload.get("type", "text")
+                        "type": payload.get("type", "text"),
+                        "group_id": recipient_id if is_group else "",
+                        "sender_name": payload.get("sender_name", "")
                     }
 
                     # Persist message to database
+                    saved_message_id = msg.get("tempId")
                     try:
-                        databases.create_document(
+                        saved_message = databases.create_document(
                             APPWRITE_DATABASE_ID,
                             APPWRITE_MESSAGES_COLLECTION,
                             ID.unique(),
                             db_payload,
                             permissions=[Permission.read(Role.users())]
                         )
+                        saved_message_id = get_document_id(saved_message) or saved_message_id
                     except Exception as e:
                         print(f"[WS DB Error] Persistence failed: {e}")
+
+                    outbound = build_outbound_message(
+                        msg,
+                        sender_id=user_id,
+                        recipient_id=recipient_id,
+                        message_id=saved_message_id,
+                        is_group=is_group,
+                    )
 
                     # Deliver
                     delivered = False
                     if is_group:
-                        delivered = await manager.broadcast_to_group(msg, recipient_id, user_id)
+                        delivered = await manager.broadcast_to_group(outbound, recipient_id, user_id)
                     else:
-                        delivered = await manager.send_personal_message(msg, recipient_id)
+                        delivered = await manager.send_personal_message(outbound, recipient_id)
                     
                     # Feedback to sender
                     await manager.send_personal_message({
                         "type": "delivery_status",
                         "recipient_id": recipient_id,
+                        "recipientId": recipient_id,
+                        "clientTempId": msg.get("tempId"),
+                        "messageId": saved_message_id,
                         "delivered": delivered,
                         "timestamp": payload.get("timestamp")
                     }, user_id)
 
                 # 2. Handle Message Editing
-                elif msg_type == "message_edit" and recipient_id and payload:
+                elif msg_type == "message_edit" and recipient_id and isinstance(payload, dict):
                     msg_id = msg.get("messageId")
                     if msg_id:
                         try:
@@ -244,7 +342,17 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                                 "iv": payload.get("iv"),
                                 "is_edited": True
                             })
-                            await manager.send_personal_message(msg, recipient_id)
+                            outbound = build_outbound_message(
+                                msg,
+                                sender_id=user_id,
+                                recipient_id=recipient_id,
+                                message_id=msg_id,
+                                is_group=recipient_is_group(msg, recipient_id),
+                            )
+                            if outbound.get("is_group"):
+                                await manager.broadcast_to_group(outbound, recipient_id, user_id)
+                            else:
+                                await manager.send_personal_message(outbound, recipient_id)
                         except Exception as e: print(f"[WS Edit Error] {e}")
 
                 # 3. Handle Message Deletion
@@ -259,29 +367,64 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                                     "ciphertext": "", 
                                     "hash": ""
                                 })
-                            await manager.send_personal_message(msg, recipient_id)
+                            outbound = build_outbound_message(
+                                msg,
+                                sender_id=user_id,
+                                recipient_id=recipient_id,
+                                message_id=msg_id,
+                                is_group=recipient_is_group(msg, recipient_id),
+                            )
+                            if outbound.get("is_group"):
+                                await manager.broadcast_to_group(outbound, recipient_id, user_id)
+                            else:
+                                await manager.send_personal_message(outbound, recipient_id)
                         except Exception as e: print(f"[WS Delete Error] {e}")
 
                 # 4-6. Other signals (Typing, Status, WebRTC)
-                elif msg_type in ["typing", "status_update", "offer", "answer", "candidate", "key_sync_request"] and recipient_id:
-                    await manager.send_personal_message(msg, recipient_id)
+                elif msg_type == "key_sync_request":
+                    group_id = get_group_id(msg) or recipient_id
+                    if group_id:
+                        outbound = build_outbound_message(
+                            msg,
+                            sender_id=user_id,
+                            recipient_id=group_id,
+                            is_group=True,
+                        )
+                        await manager.broadcast_to_group(outbound, group_id, user_id)
+                elif msg_type in ["typing", "status_update", "offer", "answer", "candidate", "reaction", "key_sync_delivery"] and recipient_id:
+                    outbound = build_outbound_message(msg, sender_id=user_id, recipient_id=recipient_id)
+                    await manager.send_personal_message(outbound, recipient_id)
+                else:
+                    print(f"[WS Notice] Ignored unsupported payload from {user_id}: {msg_type}")
 
+            except WebSocketDisconnect:
+                raise
             except json.JSONDecodeError:
                 print(f"[WS Protocol Error] Invalid JSON from {user_id}")
             except Exception as e:
-                print(f"[WS Loop Error] {e}")
-                break
+                print(f"[WS Loop Error] {user_id}: {e}")
+                try:
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "code": "message_processing_failed"
+                    }))
+                except Exception:
+                    pass
+                continue
 
     except WebSocketDisconnect:
         print(f"[WS Status] Disconnected: {user_id}")
-        await manager.disconnect(user_id)
     except Exception as e:
         print(f"[WS Critical Error] Handshake/Connection failed for {user_id}: {e}")
+    finally:
         try:
-            await manager.disconnect(user_id)
-        except: pass
+            await manager.disconnect(user_id, websocket)
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     import uvicorn
-    # Startup on all interfaces to ensure internal and external accessibility
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Render and other cloud providers inject the port via the PORT environment variable
+    port = int(os.getenv("PORT", 8000))
+    print(f"Starting server on port {port}...")
+    uvicorn.run(app, host="0.0.0.0", port=port)

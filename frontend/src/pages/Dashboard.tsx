@@ -94,6 +94,7 @@ export const Dashboard: React.FC = () => {
         if (msg.type === 'chat') handleIncomingMessage(msg);
         else if (msg.type === 'message_edit') handleIncomingEdit(msg);
         else if (msg.type === 'message_delete') handleIncomingDelete(msg);
+        else if (msg.type === 'delivery_status') handleDeliveryStatus(msg);
         else if (msg.type === 'typing') handleTypingStatus(msg);
         else if (msg.type === 'status_update') handleStatusUpdate(msg);
         else if (msg.type === 'key_sync_request') handleKeySyncRequest(msg);
@@ -528,6 +529,25 @@ export const Dashboard: React.FC = () => {
         setMessageMetadata(prev => ({
             ...prev,
             [msg.messageId]: { status: msg.status }
+        }));
+    };
+
+    const handleDeliveryStatus = (msg: any) => {
+        const resolvedId = msg.messageId || msg.clientTempId;
+        if (!resolvedId) return;
+
+        if (msg.clientTempId && msg.messageId && msg.clientTempId !== msg.messageId) {
+            setMessages(prev => prev.map(m => (
+                m.$id === msg.clientTempId ? { ...m, $id: msg.messageId } : m
+            )));
+        }
+
+        setMessageMetadata(prev => ({
+            ...prev,
+            [resolvedId]: {
+                ...prev[resolvedId],
+                status: msg.delivered ? 'delivered' : 'pending'
+            }
         }));
     };
 
