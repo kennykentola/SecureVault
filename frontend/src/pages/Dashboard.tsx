@@ -81,6 +81,13 @@ export const Dashboard: React.FC = () => {
     const { isRecording, audioBlob, recordingDuration, startRecording, stopRecording, setAudioBlob } = useAudioRecorder();
     const [isVoiceUploading, setIsVoiceUploading] = useState(false);
 
+    const getDirectChatUserId = (chat: any) => chat?.user_id || null;
+    const getChatTargetId = (chat: any) => chat?.type === 'group' ? chat?.$id : getDirectChatUserId(chat);
+    const getResolvedGroupChat = (chat: any) => {
+        if (!chat || chat.type !== 'group') return chat;
+        return groups.find(g => g.$id === chat.$id) || chat;
+    };
+
     const formatDuration = (seconds: number) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
@@ -112,7 +119,8 @@ export const Dashboard: React.FC = () => {
         if (selectedChat) {
             fetchMessages();
             // Mark all unread messages from this chat as READ
-            const chatId = selectedChat.user_id || selectedChat.$id;
+            const chatId = getChatTargetId(selectedChat);
+            if (!chatId) return;
             const unreadFromThisChat = messages.filter(m => 
                 m.sender_id !== user?.$id && 
                 messageMetadata[m.$id]?.status !== 'read' &&
@@ -240,7 +248,7 @@ export const Dashboard: React.FC = () => {
     const fetchAllUsers = async () => {
         try {
             const res = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, APPWRITE_CONFIG.COLLECTION_USERS, [Query.limit(100)]);
-            setNetworkUsers(res.documents.filter(u => u.user_id !== user?.$id));
+            setNetworkUsers(res.documents.filter(u => !!u.user_id && u.user_id !== user?.$id));
         } catch (e) { console.error("Fetch users failed", e); }
     };
 
@@ -603,6 +611,10 @@ export const Dashboard: React.FC = () => {
                     memberRes.documents[0].$id,
                     { encrypted_group_key: msg.encrypted_group_key }
                 );
+                syncRequests.current.delete(msg.groupId);
+                if (selectedChat?.type === 'group' && selectedChat.$id === msg.groupId) {
+                    setSelectedChat((prev: any) => prev ? { ...prev, encrypted_group_key: msg.encrypted_group_key } : prev);
+                }
                 // 2. Refresh local group state
                 await fetchMyGroups();
                 // 3. Trigger re-fetch of messages
@@ -631,6 +643,11 @@ export const Dashboard: React.FC = () => {
 
     const handleAddReaction = async (messageId: string, emoji: string) => {
         try {
+            const chatTargetId = getChatTargetId(selectedChat);
+            if (!chatTargetId) {
+                alert("This chat has no valid recipient account id.");
+                return;
+            }
             const res = await databases.createDocument(APPWRITE_CONFIG.DATABASE_ID, "reactions", ID.unique(), {
                 message_id: messageId,
                 user_id: user?.$id,
@@ -646,7 +663,7 @@ export const Dashboard: React.FC = () => {
                 type: 'reaction',
                 messageId,
                 emoji,
-                recipientId: selectedChat.user_id || selectedChat.$id
+                recipientId: chatTargetId
             });
         } catch (e) { console.error(e); }
     };
@@ -701,9 +718,15 @@ export const Dashboard: React.FC = () => {
         try {
             let encrypted;
             const isGroup = selectedChat.type === 'group';
+            const chatTargetId = getChatTargetId(selectedChat);
+            if (!chatTargetId) {
+                alert("This contact is missing a valid account id. Ask them to sign in again so their profile can sync.");
+                return;
+            }
             if (isGroup) {
                 try {
-                    const decryptedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(selectedChat.encrypted_group_key, privateKey);
+                    const activeGroup = getResolvedGroupChat(selectedChat);
+                    const decryptedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(activeGroup.encrypted_group_key, privateKey);
                     const groupKey = await KeyManager.importSecretKey(decryptedKeyB64);
                     encrypted = await HybridEncryptor.encryptSymmetric(content, groupKey);
                 } catch (e: any) {
@@ -760,7 +783,7 @@ export const Dashboard: React.FC = () => {
 
             const msgPacket = {
                 type: 'chat',
-                recipient_id: selectedChat.user_id || selectedChat.$id,
+                recipient_id: chatTargetId,
                 is_group: isGroup,
                 payload: {
                     ...encrypted,
@@ -805,10 +828,9 @@ export const Dashboard: React.FC = () => {
             }]);
 
             // Update inbox preview
-            const chatId = selectedChat.user_id || selectedChat.$id;
             setLastMessages(prev => ({
                 ...prev,
-                [chatId]: { text: content, timestamp: msgPacket.payload.timestamp, sender_id: user?.$id }
+                [chatTargetId]: { text: content, timestamp: msgPacket.payload.timestamp, sender_id: user?.$id }
             }));
             
             setNewMessage("");
@@ -825,8 +847,11 @@ export const Dashboard: React.FC = () => {
         try {
             let encrypted;
             const isGroup = selectedChat.type === 'group';
+            const chatTargetId = getChatTargetId(selectedChat);
+            if (!chatTargetId) return;
             if (isGroup) {
-                const decryptedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(selectedChat.encrypted_group_key, privateKey!);
+                const activeGroup = getResolvedGroupChat(selectedChat);
+                const decryptedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(activeGroup.encrypted_group_key, privateKey!);
                 const groupKey = await KeyManager.importSecretKey(decryptedKeyB64);
                 encrypted = await HybridEncryptor.encryptSymmetric(newMessage, groupKey);
             } else {
@@ -837,7 +862,7 @@ export const Dashboard: React.FC = () => {
             sendMessage({
                 type: 'message_edit',
                 messageId: editingMessage.$id,
-                recipient_id: selectedChat.user_id || selectedChat.$id,
+                recipient_id: chatTargetId,
                 is_group: isGroup,
                 payload: encrypted
             });
@@ -851,10 +876,12 @@ export const Dashboard: React.FC = () => {
     const handleDeleteMessage = async (msgId: string, everyone: boolean) => {
         try {
             if (everyone) {
+                const chatTargetId = getChatTargetId(selectedChat);
+                if (!chatTargetId) return;
                 sendMessage({
                     type: 'message_delete',
                     messageId: msgId,
-                    recipient_id: selectedChat.user_id || selectedChat.$id,
+                    recipient_id: chatTargetId,
                     deleteForEveryone: true
                 });
                 // Optimistic UI update
@@ -880,6 +907,11 @@ export const Dashboard: React.FC = () => {
             setShowUnlockModal(true);
             return;
         }
+        const chatTargetId = getChatTargetId(selectedChat);
+        if (!chatTargetId) {
+            alert("This contact is missing a valid account id. Ask them to sign in again so their profile can sync.");
+            return;
+        }
         setIsVoiceUploading(true);
         try {
             // 1. Generate a random AES key for this file
@@ -902,7 +934,8 @@ export const Dashboard: React.FC = () => {
             // 4. Wrap the file key with recipient's public key (or group key)
             let encryptedKeyPayload;
             if (selectedChat.type === 'group') {
-                const decryptedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(selectedChat.encrypted_group_key, privateKey!);
+                const activeGroup = getResolvedGroupChat(selectedChat);
+                const decryptedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(activeGroup.encrypted_group_key, privateKey!);
                 const groupKey = await KeyManager.importSecretKey(decryptedKeyB64);
                 const rawKey = await window.crypto.subtle.exportKey("raw", fileKey);
                 const rawKeyB64 = btoa(String.fromCharCode(...new Uint8Array(rawKey)));
@@ -933,7 +966,7 @@ export const Dashboard: React.FC = () => {
             // 5. Send message packet via WebSocket
             const msgPacket = {
                 type: 'chat',
-                recipient_id: selectedChat.user_id || selectedChat.$id,
+                recipient_id: chatTargetId,
                 is_group: selectedChat.type === 'group',
                 payload: {
                     type,
@@ -972,7 +1005,12 @@ export const Dashboard: React.FC = () => {
     const fetchMessages = async () => {
         try {
             const isGroup = selectedChat.type === 'group';
-            const chatIdentifier = isGroup ? selectedChat.$id : (selectedChat.user_id || selectedChat.$id);
+            const chatIdentifier = getChatTargetId(selectedChat);
+            if (!chatIdentifier) {
+                setMessages([]);
+                console.warn("Selected chat is missing a canonical recipient id.");
+                return;
+            }
             
             let res;
             if (isGroup) {
@@ -1578,8 +1616,8 @@ export const Dashboard: React.FC = () => {
                                 {selectedChat.type === 'group' && (
                                     <button onClick={() => setShowAddMember(true)} className="p-2.5 md:p-3 bg-indigo-50 hover:bg-indigo-100 rounded-2xl transition-all text-indigo-600"><Plus className="w-5 h-5" /></button>
                                 )}
-                                <button onClick={() => startCall(selectedChat.user_id || selectedChat.$id, 'voice')} className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Phone className="w-4 h-4 md:w-5 md:h-5" /></button>
-                                <button onClick={() => startCall(selectedChat.user_id || selectedChat.$id, 'video')} className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Video className="w-4 h-4 md:w-5 md:h-5" /></button>
+                                <button onClick={() => { const chatTargetId = getChatTargetId(selectedChat); if (chatTargetId) startCall(chatTargetId, 'voice'); }} className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Phone className="w-4 h-4 md:w-5 md:h-5" /></button>
+                                <button onClick={() => { const chatTargetId = getChatTargetId(selectedChat); if (chatTargetId) startCall(chatTargetId, 'video'); }} className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Video className="w-4 h-4 md:w-5 md:h-5" /></button>
                                 <button onClick={() => setShowGroupDetail(true)} className="p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><MoreVertical className="w-4 h-4 md:w-5 md:h-5" /></button>
                             </div>
                         </header>

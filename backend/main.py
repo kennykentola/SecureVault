@@ -111,6 +111,33 @@ def recipient_is_group(message: dict, recipient_id: Optional[str]) -> bool:
         return False
 
 
+def normalize_direct_recipient_id(recipient_id: Optional[str]) -> Optional[str]:
+    if not recipient_id:
+        return recipient_id
+
+    try:
+        res = databases.list_documents(
+            APPWRITE_DATABASE_ID,
+            "users_data",
+            [Query.equal("user_id", recipient_id), Query.limit(1)]
+        )
+        if res.documents:
+            return recipient_id
+    except Exception:
+        pass
+
+    try:
+        profile = databases.get_document(APPWRITE_DATABASE_ID, "users_data", recipient_id)
+        canonical_user_id = get_value(profile, "user_id")
+        if canonical_user_id:
+            print(f"[WS Notice] Normalized profile recipient {recipient_id} -> {canonical_user_id}")
+            return canonical_user_id
+    except Exception:
+        pass
+
+    return recipient_id
+
+
 def build_message_payloads(user_id: str, recipient_id: str, payload: dict, save_key: str, is_group: bool):
     legacy_payload = {
         "sender_id": user_id,
@@ -313,6 +340,8 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 # 1. Handle Chat Messages (Direct & Group)
                 if msg_type == "chat" and recipient_id and isinstance(payload, dict):
                     is_group = recipient_is_group(msg, recipient_id)
+                    if not is_group:
+                        recipient_id = normalize_direct_recipient_id(recipient_id)
 
                     # Handle Dual-Key wrapping for Sender-Access
                     enc_key = payload.get("encryptedKey", "")
@@ -370,6 +399,8 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     msg_id = msg.get("messageId")
                     if msg_id:
                         try:
+                            if not recipient_is_group(msg, recipient_id):
+                                recipient_id = normalize_direct_recipient_id(recipient_id)
                             databases.update_document(APPWRITE_DATABASE_ID, APPWRITE_MESSAGES_COLLECTION, msg_id, {
                                 "ciphertext": payload.get("ciphertext"),
                                 "hash": payload.get("hash"),
@@ -395,6 +426,8 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     delete_for_everyone = msg.get("deleteForEveryone", False)
                     if msg_id:
                         try:
+                            if not recipient_is_group(msg, recipient_id):
+                                recipient_id = normalize_direct_recipient_id(recipient_id)
                             if delete_for_everyone:
                                 databases.update_document(APPWRITE_DATABASE_ID, APPWRITE_MESSAGES_COLLECTION, msg_id, {
                                     "is_deleted": True,
@@ -426,6 +459,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                         )
                         await manager.broadcast_to_group(outbound, group_id, user_id)
                 elif msg_type in ["typing", "status_update", "offer", "answer", "candidate", "reaction", "key_sync_delivery"] and recipient_id:
+                    recipient_id = normalize_direct_recipient_id(recipient_id)
                     outbound = build_outbound_message(msg, sender_id=user_id, recipient_id=recipient_id)
                     await manager.send_personal_message(outbound, recipient_id)
                 else:
