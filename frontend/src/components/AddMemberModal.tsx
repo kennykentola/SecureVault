@@ -142,7 +142,9 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose,
                                 <p className="text-[10px] text-primary-600 font-black uppercase tracking-widest mt-1">Expanding Group Collective</p>
                             </div>
                         </div>
-                        <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6 text-gray-400" /></button>
+                        <button onClick={onClose} className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg">
+                            <X className="w-6 h-6" />
+                        </button>
                     </div>
 
                     <div className="p-8 space-y-6">

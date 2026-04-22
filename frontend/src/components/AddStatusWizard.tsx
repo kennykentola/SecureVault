@@ -171,7 +171,9 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
                                 <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1">Temporary E2EE Artifact</p>
                             </div>
                         </div>
-                        <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6 text-gray-400" /></button>
+                        <button onClick={onClose} className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg">
+                            <X className="w-6 h-6" />
+                        </button>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">

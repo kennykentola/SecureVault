@@ -142,7 +142,9 @@ export const CreateGroupWizard: React.FC<CreateGroupWizardProps> = ({ isOpen, on
                 <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mt-1">Multi-Party E2EE Protocol</p>
               </div>
             </div>
-            <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors"><X className="w-6 h-6" /></button>
+            <button onClick={onClose} className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg">
+                <X className="w-6 h-6" />
+            </button>
           </div>
 
           <div className="p-8">

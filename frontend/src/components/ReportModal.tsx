@@ -65,7 +65,9 @@ export const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose, targe
                                 <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mt-1">Safety & Governance Protocol</p>
                             </div>
                         </div>
-                        <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X className="w-6 h-6 text-gray-400" /></button>
+                        <button onClick={onClose} className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg">
+                            <X className="w-6 h-6" />
+                        </button>
                     </div>
 
                     <div className="p-8">

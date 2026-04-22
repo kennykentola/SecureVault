@@ -103,7 +103,7 @@ export const FindUsersModal: React.FC<FindUsersModalProps> = ({ isOpen, onClose,
                                     <p className="text-[10px] uppercase tracking-widest font-bold text-slate-400">Search by name, email or phone</p>
                                 </div>
                             </div>
-                            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400">
+                            <button onClick={onClose} className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>

@@ -1295,7 +1295,7 @@ export const Dashboard: React.FC = () => {
                             </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                            <button onClick={() => setIsMobileSidebarOpen(false)} className="md:hidden p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 hover:text-slate-900"><X className="w-5 h-5" /></button>
+                            <button onClick={() => setIsMobileSidebarOpen(false)} className="md:hidden p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg shadow-black/20"><X className="w-5 h-5" /></button>
                             <div className="relative">
                                 <button onClick={() => setShowTopMenu(!showTopMenu)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 hover:text-slate-900"><MoreVertical className="w-5 h-5" /></button>
                                 {showTopMenu && (
@@ -1614,7 +1614,7 @@ const isLink = searchText.includes("http");
                                                     <p className="text-[10px] font-black text-blue-400 mb-1 uppercase tracking-widest">Editing Message</p>
                                                     <p className="text-sm text-slate-200 truncate">{editingMessage.text}</p>
                                                 </div>
-                                                <button onClick={() => { setEditingMessage(null); setNewMessage(""); }} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white">
+                                                <button onClick={() => { setEditingMessage(null); setNewMessage(""); }} className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg">
                                                     <X className="w-4 h-4" />
                                                 </button>
                                             </div>
@@ -1632,7 +1632,7 @@ const isLink = searchText.includes("http");
                                                     <p className="text-[10px] font-black text-emerald-400 mb-1 uppercase tracking-widest">Replying to {replyTo.sender_name || selectedChat.username}</p>
                                                     <p className="text-sm text-slate-200 truncate">{replyTo.text || 'Voice/Media'}</p>
                                                 </div>
-                                                <button onClick={() => setReplyTo(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white">
+                                                <button onClick={() => setReplyTo(null)} className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg">
                                                     <X className="w-4 h-4" />
                                                 </button>
                                             </div>

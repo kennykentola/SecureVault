@@ -21,12 +21,25 @@ APPWRITE_API_KEY = os.getenv("APPWRITE_API_KEY")
 APPWRITE_DATABASE_ID = os.getenv("APPWRITE_DATABASE_ID")
 APPWRITE_MESSAGES_COLLECTION = "messages"
 
+print("\n--- SERVER INITIALIZATION ---")
+print(f"Endpoint: {APPWRITE_ENDPOINT}")
+print(f"Project ID: {APPWRITE_PROJECT_ID}")
+print(f"Database ID: {APPWRITE_DATABASE_ID}")
+print(f"API Key present: {bool(APPWRITE_API_KEY)}")
+
+if not all([APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, APPWRITE_API_KEY]):
+    print("CRITICAL: Missing Appwrite configuration. Check your environment variables.")
+
 # Initialize Appwrite Client
-client = Client()
-client.set_endpoint(APPWRITE_ENDPOINT)
-client.set_project(APPWRITE_PROJECT_ID)
-client.set_key(APPWRITE_API_KEY)
-databases = Databases(client)
+try:
+    client = Client()
+    client.set_endpoint(APPWRITE_ENDPOINT)
+    client.set_project(APPWRITE_PROJECT_ID)
+    client.set_key(APPWRITE_API_KEY)
+    databases = Databases(client)
+    print("Appwrite Client initialized successfully.")
+except Exception as e:
+    print(f"Appwrite Client initialization failed: {e}")
 
 app = FastAPI(title="SecureVault E2EE Backend")
 
@@ -38,6 +51,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Health Check
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "appwrite_configured": all([APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, APPWRITE_API_KEY, APPWRITE_DATABASE_ID]),
+        "active_connections": len(manager.active_connections)
+    }
 
 # WebSocket Connection Manager
 class ConnectionManager:
@@ -126,151 +148,138 @@ async def root():
 
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
-    await manager.connect(user_id, websocket)
+    print(f"\n[WS Handshake] Attempt for user: {user_id}")
     try:
+        await manager.connect(user_id, websocket)
+        print(f"[WS Status] Connection accepted for {user_id}")
+        
         while True:
-            data = await websocket.receive_text()
-            msg = json.loads(data)
-            print(f"Message received from {user_id}: {msg.get('type')}")
-            
-            # Protocol handles both naming variations
-            msg_type = msg.get("type")
-            recipient_id = msg.get("recipient_id") or msg.get("recipientId")
-            payload = msg.get("payload")
-            
-            # 1. Handle Chat Messages (Direct & Group)
-            if msg_type == "chat" and recipient_id and payload:
-                print(f"Delivering chat from {user_id} to {recipient_id}")
+            try:
+                data = await websocket.receive_text()
+                if not data:
+                    continue
+                    
+                msg = json.loads(data)
+                msg_type = msg.get("type")
+                print(f"[WS Inbound] {user_id}: {msg_type}")
                 
-                # Identify if recipient is a group
-                is_group = False
-                try:
-                    databases.get_document(APPWRITE_DATABASE_ID, "groups", recipient_id)
-                    is_group = True
-                except:
-                    pass
-
-                # Handle Dual-Key wrapping for Sender-Access
-                enc_key = payload.get("encryptedKey", "")
-                enc_key_sender = payload.get("encryptedKeySender")
+                recipient_id = msg.get("recipient_id") or msg.get("recipientId")
+                payload = msg.get("payload")
                 
-                if enc_key_sender:
-                    # For 1:1 chats, we store both keys so the sender can also decrypt
-                    save_key = json.dumps({
-                        "encryptedKey": enc_key,
-                        "encryptedKeySender": enc_key_sender
-                    })
-                else:
-                    # For groups or old clients, store as is
-                    save_key = json.dumps(enc_key) if isinstance(enc_key, dict) else enc_key
-
-                # Map frontend packet to database schema
-                db_payload = {
-                    "sender_id": user_id,
-                    "receiver_id": recipient_id, 
-                    "ciphertext": payload.get("ciphertext", ""),
-                    "encrypted_key": save_key, 
-                    "iv": payload.get("iv", ""),
-                    "hash": payload.get("hash", ""),
-                    "timestamp": payload.get("timestamp", ""),
-                    "type": payload.get("type", "text")
-                }
-
-                # Persist message to database
-                try:
-                    databases.create_document(
-                        APPWRITE_DATABASE_ID,
-                        APPWRITE_MESSAGES_COLLECTION,
-                        ID.unique(),
-                        db_payload,
-                        permissions=[
-                            Permission.read(Role.users()),
-                        ]
-                    )
-                except Exception as e:
-                    print(f"Database persistence error: {e}")
-
-                # Deliver to recipient(s)
-                delivered = False
-                if is_group:
-                    delivered = await manager.broadcast_to_group(msg, recipient_id, user_id)
-                else:
-                    delivered = await manager.send_personal_message(msg, recipient_id)
-                
-                # Feedback to sender about delivery success
-                await manager.send_personal_message({
-                    "type": "delivery_status",
-                    "recipient_id": recipient_id,
-                    "delivered": delivered,
-                    "timestamp": payload.get("timestamp")
-                }, user_id)
-
-            # 2. Handle Message Editing
-            elif msg_type == "message_edit" and recipient_id and payload:
-                msg_id = msg.get("messageId")
-                if msg_id:
+                # 1. Handle Chat Messages (Direct & Group)
+                if msg_type == "chat" and recipient_id and payload:
+                    # Identify if recipient is a group
+                    is_group = False
                     try:
-                        databases.update_document(APPWRITE_DATABASE_ID, APPWRITE_MESSAGES_COLLECTION, msg_id, {
-                            "ciphertext": payload.get("ciphertext"),
-                            "hash": payload.get("hash"),
-                            "iv": payload.get("iv"),
-                            "is_edited": True
-                        })
-                        await manager.send_personal_message(msg, recipient_id)
-                    except Exception as e: print(f"Edit error: {e}")
-
-            # 3. Handle Message Deletion
-            elif msg_type == "message_delete" and recipient_id:
-                msg_id = msg.get("messageId")
-                delete_for_everyone = msg.get("deleteForEveryone", False)
-                if msg_id:
-                    try:
-                        if delete_for_everyone:
-                            databases.update_document(APPWRITE_DATABASE_ID, APPWRITE_MESSAGES_COLLECTION, msg_id, {
-                                "is_deleted": True,
-                                "ciphertext": "", 
-                                "hash": ""
-                            })
-                        await manager.send_personal_message(msg, recipient_id)
-                    except Exception as e: print(f"Delete error: {e}")
-
-            # 4. Handle Typing Status Updates
-            elif msg_type == "typing" and recipient_id:
-                await manager.send_personal_message(msg, recipient_id)
-
-            # 5. Handle Status Updates (read/delivered acknowledgements)
-            elif msg_type == "status_update" and recipient_id:
-                await manager.send_personal_message(msg, recipient_id)
-                
-                msg_id = msg.get("messageId")
-                if msg_id:
-                    try:
-                        meta_res = databases.list_documents(APPWRITE_DATABASE_ID, "message_meta", [Query.equal("msg_id", msg_id)])
-                        update_data = {"status": msg.get("status"), "updated_at": payload.get("timestamp") if payload else None}
-                        if meta_res.documents:
-                            doc = meta_res.documents[0]
-                            doc_id = None
-                            if isinstance(doc, dict):
-                                doc_id = doc.get('$id')
-                            else:
-                                doc_id = getattr(doc, '$id', None) or getattr(doc, 'id', None)
-                                
-                            if doc_id:
-                                databases.update_document(APPWRITE_DATABASE_ID, "message_meta", doc_id, update_data)
+                        # Optimization: Groups start with a specific prefix or we check DB
+                        if recipient_id.startswith('group:'): # Example optimization
+                            is_group = True
                         else:
-                            databases.create_document(APPWRITE_DATABASE_ID, "message_meta", ID.unique(), {"msg_id": msg_id, **update_data})
+                            try:
+                                databases.get_document(APPWRITE_DATABASE_ID, "groups", recipient_id)
+                                is_group = True
+                            except: pass
                     except Exception as e:
-                        print(f"Meta update error: {e}")
+                        print(f"[WS Error] Group check failed: {e}")
 
-            # 6. Handle WebRTC Signaling (Video/Voice calls)
-            elif msg_type in ["offer", "answer", "candidate"] and recipient_id:
-                await manager.send_personal_message(msg, recipient_id)
+                    # Handle Dual-Key wrapping for Sender-Access
+                    enc_key = payload.get("encryptedKey", "")
+                    enc_key_sender = payload.get("encryptedKeySender")
+                    
+                    if enc_key_sender:
+                        save_key = json.dumps({
+                            "encryptedKey": enc_key,
+                            "encryptedKeySender": enc_key_sender
+                        })
+                    else:
+                        save_key = json.dumps(enc_key) if isinstance(enc_key, dict) else enc_key
+
+                    # Map frontend packet to database schema
+                    db_payload = {
+                        "sender_id": user_id,
+                        "receiver_id": recipient_id, 
+                        "ciphertext": payload.get("ciphertext", ""),
+                        "encrypted_key": save_key, 
+                        "iv": payload.get("iv", ""),
+                        "hash": payload.get("hash", ""),
+                        "timestamp": payload.get("timestamp", ""),
+                        "type": payload.get("type", "text")
+                    }
+
+                    # Persist message to database
+                    try:
+                        databases.create_document(
+                            APPWRITE_DATABASE_ID,
+                            APPWRITE_MESSAGES_COLLECTION,
+                            ID.unique(),
+                            db_payload,
+                            permissions=[Permission.read(Role.users())]
+                        )
+                    except Exception as e:
+                        print(f"[WS DB Error] Persistence failed: {e}")
+
+                    # Deliver
+                    delivered = False
+                    if is_group:
+                        delivered = await manager.broadcast_to_group(msg, recipient_id, user_id)
+                    else:
+                        delivered = await manager.send_personal_message(msg, recipient_id)
+                    
+                    # Feedback to sender
+                    await manager.send_personal_message({
+                        "type": "delivery_status",
+                        "recipient_id": recipient_id,
+                        "delivered": delivered,
+                        "timestamp": payload.get("timestamp")
+                    }, user_id)
+
+                # 2. Handle Message Editing
+                elif msg_type == "message_edit" and recipient_id and payload:
+                    msg_id = msg.get("messageId")
+                    if msg_id:
+                        try:
+                            databases.update_document(APPWRITE_DATABASE_ID, APPWRITE_MESSAGES_COLLECTION, msg_id, {
+                                "ciphertext": payload.get("ciphertext"),
+                                "hash": payload.get("hash"),
+                                "iv": payload.get("iv"),
+                                "is_edited": True
+                            })
+                            await manager.send_personal_message(msg, recipient_id)
+                        except Exception as e: print(f"[WS Edit Error] {e}")
+
+                # 3. Handle Message Deletion
+                elif msg_type == "message_delete" and recipient_id:
+                    msg_id = msg.get("messageId")
+                    delete_for_everyone = msg.get("deleteForEveryone", False)
+                    if msg_id:
+                        try:
+                            if delete_for_everyone:
+                                databases.update_document(APPWRITE_DATABASE_ID, APPWRITE_MESSAGES_COLLECTION, msg_id, {
+                                    "is_deleted": True,
+                                    "ciphertext": "", 
+                                    "hash": ""
+                                })
+                            await manager.send_personal_message(msg, recipient_id)
+                        except Exception as e: print(f"[WS Delete Error] {e}")
+
+                # 4-6. Other signals (Typing, Status, WebRTC)
+                elif msg_type in ["typing", "status_update", "offer", "answer", "candidate", "key_sync_request"] and recipient_id:
+                    await manager.send_personal_message(msg, recipient_id)
+
+            except json.JSONDecodeError:
+                print(f"[WS Protocol Error] Invalid JSON from {user_id}")
+            except Exception as e:
+                print(f"[WS Loop Error] {e}")
+                break
 
     except WebSocketDisconnect:
+        print(f"[WS Status] Disconnected: {user_id}")
         await manager.disconnect(user_id)
     except Exception as e:
-        print(f"WebSocket execution error: {e}")
-        await manager.disconnect(user_id)
+        print(f"[WS Critical Error] Handshake/Connection failed for {user_id}: {e}")
+        try:
+            await manager.disconnect(user_id)
+        except: pass
 
 if __name__ == "__main__":
     import uvicorn
