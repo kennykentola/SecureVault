@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { PhoneOff, Mic, Video } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'framer-motion';

@@ -140,8 +140,18 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     pass
 
                 # Handle Dual-Key wrapping for Sender-Access
-                enc_key_payload = payload.get("encryptedKey", "")
-                save_key = json.dumps(enc_key_payload) if isinstance(enc_key_payload, dict) else enc_key_payload
+                enc_key = payload.get("encryptedKey", "")
+                enc_key_sender = payload.get("encryptedKeySender")
+                
+                if enc_key_sender:
+                    # For 1:1 chats, we store both keys so the sender can also decrypt
+                    save_key = json.dumps({
+                        "encryptedKey": enc_key,
+                        "encryptedKeySender": enc_key_sender
+                    })
+                else:
+                    # For groups or old clients, store as is
+                    save_key = json.dumps(enc_key) if isinstance(enc_key, dict) else enc_key
 
                 # Map frontend packet to database schema
                 db_payload = {
