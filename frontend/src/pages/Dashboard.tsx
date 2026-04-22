@@ -66,7 +66,7 @@ export const Dashboard: React.FC = () => {
     const [isKeyMismatch, setIsKeyMismatch] = useState(false);
     const [isRepairing, setIsRepairing] = useState(false);
     const [showMonitor, setShowMonitor] = useState(true);
-    const syncRequests = useRef<Set<string>>(new Set());
+    const syncRequests = useRef<Map<string, number>>(new Map());
     
     // Status System State
     const [showStatusViewer, setShowStatusViewer] = useState(false);
@@ -86,6 +86,26 @@ export const Dashboard: React.FC = () => {
     const getResolvedGroupChat = (chat: any) => {
         if (!chat || chat.type !== 'group') return chat;
         return groups.find(g => g.$id === chat.$id) || chat;
+    };
+    const requestGroupKeySync = (groupId?: string) => {
+        if (!groupId) return false;
+
+        const now = Date.now();
+        const lastRequestAt = syncRequests.current.get(groupId) || 0;
+        const cooldownMs = 15000;
+
+        if (now - lastRequestAt < cooldownMs) {
+            return false;
+        }
+
+        syncRequests.current.set(groupId, now);
+        sendMessage({
+            type: 'key_sync_request',
+            groupId,
+            requesterId: user?.$id,
+            username: user?.name
+        });
+        return true;
     };
 
     const formatDuration = (seconds: number) => {
@@ -478,14 +498,8 @@ export const Dashboard: React.FC = () => {
             const isMismatch = e.name === "OperationError" || e.message === 'IDENTITY_MISMATCH';
             
             // Signal Session Repair for LIVE message
-            if (isMismatch && msg.is_group && !syncRequests.current.has(msg.recipient_id)) {
-                syncRequests.current.add(msg.recipient_id);
-                sendMessage({
-                    type: 'key_sync_request',
-                    groupId: msg.recipient_id,
-                    requesterId: user?.$id,
-                    username: user?.name
-                });
+            if (isMismatch && msg.is_group) {
+                requestGroupKeySync(msg.recipient_id);
             }
 
             setMessages(prev => [...prev.filter(m => m.$id !== msg.$id), { 
@@ -735,12 +749,7 @@ export const Dashboard: React.FC = () => {
                     
                     if (isMismatch) {
                         console.log("[Security] Attempting automatic session repair...");
-                        sendMessage({
-                            type: 'key_sync_request',
-                            groupId: selectedChat.$id,
-                            requesterId: user?.$id,
-                            username: user?.name
-                        });
+                        requestGroupKeySync(selectedChat.$id);
                         alert("Your secure session for this group needs repair. We've automatically requested a new key from other members. Please try sending your message again in a few seconds.");
                     } else {
                         alert("Failed to encrypt group message. Please check your secure connection.");
@@ -1112,14 +1121,8 @@ export const Dashboard: React.FC = () => {
                             const isMismatch = err.name === "OperationError" || err.message === 'IDENTITY_MISMATCH';
                             
                             // Signal Session Repair for historical group message
-                            if (isMismatch && !syncRequests.current.has(m.receiver_id)) {
-                                syncRequests.current.add(m.receiver_id);
-                                sendMessage({
-                                    type: 'key_sync_request',
-                                    groupId: m.receiver_id,
-                                    requesterId: user?.$id,
-                                    username: user?.name
-                                });
+                            if (isMismatch) {
+                                requestGroupKeySync(m.receiver_id);
                             }
 
                             return { 
@@ -1174,14 +1177,8 @@ export const Dashboard: React.FC = () => {
                             const isMismatch = decErr.name === "OperationError" || decErr.message === 'IDENTITY_MISMATCH';
                             
                             // Signal Session Repair (WhatsApp Style)
-                            if (isMismatch && isGroup && !syncRequests.current.has(m.receiver_id)) {
-                                syncRequests.current.add(m.receiver_id);
-                                sendMessage({
-                                    type: 'key_sync_request',
-                                    groupId: m.receiver_id,
-                                    requesterId: user?.$id,
-                                    username: user?.name
-                                });
+                            if (isMismatch && isGroup) {
+                                requestGroupKeySync(m.receiver_id);
                             }
 
                             return { 
@@ -1203,12 +1200,7 @@ export const Dashboard: React.FC = () => {
                     const isMismatch = err.name === "OperationError" || err.message === 'IDENTITY_MISMATCH';
                     
                     if (isMismatch && m.is_group) {
-                        sendMessage({
-                            type: 'key_sync_request',
-                            groupId: m.receiver_id || selectedChat?.$id,
-                            requesterId: user?.$id,
-                            username: user?.name
-                        });
+                        requestGroupKeySync(m.receiver_id || selectedChat?.$id);
                     }
                     const isMalformed = err.message.includes("Missing ciphertext");
                     
