@@ -33,7 +33,7 @@ import { SecurityDashboard } from '../components/SecurityDashboard';
 import { storage } from '../lib/appwrite';
 
 export const Dashboard: React.FC = () => {
-    const { user, privateKey, unlockKeys, checkKeys, setupNewVault, logout } = useAuth();
+    const { user, privateKey, legacyPrivateKeys, unlockKeys, checkKeys, setupNewVault, logout } = useAuth();
     const [sidebarTab, setSidebarTab] = useState<'chats' | 'updates' | 'calls'>('chats');
     const [networkUsers, setNetworkUsers] = useState<any[]>([]);
     const [groups, setGroups] = useState<any[]>([]);
@@ -65,6 +65,7 @@ export const Dashboard: React.FC = () => {
     const [searchFilters, setSearchFilters] = useState<{ media: boolean; links: boolean }>({ media: false, links: false });
     const [isKeyMismatch, setIsKeyMismatch] = useState(false);
     const [isRepairing, setIsRepairing] = useState(false);
+    const [identityRepairReason, setIdentityRepairReason] = useState<'cloud_mismatch' | 'old_identity_message' | null>(null);
     const [showMonitor, setShowMonitor] = useState(true);
     const syncRequests = useRef<Map<string, number>>(new Map());
     
@@ -86,6 +87,48 @@ export const Dashboard: React.FC = () => {
     const getResolvedGroupChat = (chat: any) => {
         if (!chat || chat.type !== 'group') return chat;
         return groups.find(g => g.$id === chat.$id) || chat;
+    };
+    const GROUP_WAITING_TEXT = "[Waiting for this message. This may take a while.]";
+    const OLD_IDENTITY_TEXT = "[Encrypted for Old Identity]";
+    const availablePrivateKeys = React.useMemo(
+        () => [privateKey, ...legacyPrivateKeys].filter((key): key is CryptoKey => !!key),
+        [privateKey, legacyPrivateKeys]
+    );
+    const isIdentityMismatchError = (error: any) => error?.name === 'OperationError' || error?.message === 'IDENTITY_MISMATCH';
+    const withPrivateKeyFallback = async <T,>(operation: (candidateKey: CryptoKey) => Promise<T>): Promise<T> => {
+        if (!availablePrivateKeys.length) {
+            throw new Error("VAULT_LOCKED");
+        }
+
+        let lastError: any = null;
+
+        for (const candidateKey of availablePrivateKeys) {
+            try {
+                return await operation(candidateKey);
+            } catch (error: any) {
+                lastError = error;
+                if (!isIdentityMismatchError(error)) {
+                    throw error;
+                }
+            }
+        }
+
+        throw lastError || new Error("IDENTITY_MISMATCH");
+    };
+    const decryptGroupKeyForChat = async (group: any) => {
+        const encryptedGroupKey = group?.encrypted_group_key || group?.encrypted_key;
+        if (!encryptedGroupKey) {
+            throw new Error("Missing group security key.");
+        }
+
+        const decryptedKeyB64 = await withPrivateKeyFallback((candidateKey) => (
+            HybridEncryptor.decryptKeyWithRSA(encryptedGroupKey, candidateKey)
+        ));
+
+        return await KeyManager.importSecretKey(decryptedKeyB64);
+    };
+    const flagDirectIdentityIssue = () => {
+        setIdentityRepairReason(prev => prev === 'cloud_mismatch' ? prev : 'old_identity_message');
     };
     const requestGroupKeySync = (groupId?: string) => {
         if (!groupId) return false;
@@ -158,7 +201,7 @@ export const Dashboard: React.FC = () => {
                 setMessageMetadata(prev => ({ ...prev, [m.$id]: { ...prev[m.$id], status: 'read' } }));
             });
         }
-    }, [selectedChat, privateKey, groups]);
+    }, [selectedChat, privateKey, legacyPrivateKeys, groups]);
 
     useEffect(() => {
         if (audioBlob) {
@@ -236,11 +279,10 @@ export const Dashboard: React.FC = () => {
                             if (isGrp) {
                                 const group = groups.find(g => g.$id === m.receiver_id);
                                 if (!group) return;
-                                const decryptedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(group.encrypted_group_key, privateKey!);
-                                const groupKey = await KeyManager.importSecretKey(decryptedKeyB64);
+                                const groupKey = await decryptGroupKeyForChat(group);
                                 text = await HybridEncryptor.decryptSymmetric(m as any, groupKey);
                             } else {
-                                text = await HybridEncryptor.decrypt(m as any, privateKey!);
+                                text = await withPrivateKeyFallback((candidateKey) => HybridEncryptor.decrypt(m as any, candidateKey));
                             }
                             if (text) {
                                 setLastMessages(prev => ({ ...prev, [chatId]: { ...prev[chatId], text } }));
@@ -325,6 +367,7 @@ export const Dashboard: React.FC = () => {
                 if (localPubKey && remotePubKey && localPubKey !== remotePubKey) {
                     console.warn("[Security] Local and Remote public keys are out of sync! Triggering automatic repair...");
                     setIsKeyMismatch(true);
+                    setIdentityRepairReason('cloud_mismatch');
                     
                     // Silent auto-repair
                     try {
@@ -336,6 +379,7 @@ export const Dashboard: React.FC = () => {
                         );
                         console.log("[Security] Cloud identity auto-repaired.");
                         setIsKeyMismatch(false);
+                        setIdentityRepairReason(null);
                     } catch (e) {
                         console.error("[Security] Auto-repair failed:", e);
                     }
@@ -350,24 +394,43 @@ export const Dashboard: React.FC = () => {
         setIsRepairing(true);
         try {
             const localPubKey = await KeyManager.getPublicKey();
+            if (!localPubKey) {
+                throw new Error("Unlock your current vault on this device first, then repair your identity.");
+            }
             const res = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, APPWRITE_CONFIG.COLLECTION_USERS, [
                 Query.equal("user_id", user?.$id)
             ]);
 
             if (res.total > 0) {
-                await databases.updateDocument(
-                    APPWRITE_CONFIG.DATABASE_ID,
-                    APPWRITE_CONFIG.COLLECTION_USERS,
-                    res.documents[0].$id,
-                    { public_key: localPubKey }
-                );
-                console.log("[Security] Cloud identity repaired successfully.");
+                const remoteDoc = res.documents[0];
+                const remotePubKey = remoteDoc.public_key || remoteDoc.publicKey || null;
+                const alreadySynced = remotePubKey === localPubKey;
+
+                if (!alreadySynced) {
+                    await databases.updateDocument(
+                        APPWRITE_CONFIG.DATABASE_ID,
+                        APPWRITE_CONFIG.COLLECTION_USERS,
+                        remoteDoc.$id,
+                        { public_key: localPubKey }
+                    );
+                    console.log("[Security] Cloud identity repaired successfully.");
+                } else {
+                    console.log("[Security] Cloud identity already matches the current local vault.");
+                }
+
                 setIsKeyMismatch(false);
-                alert("Security Identity Restored! New messages from others will now be encrypted for your current vault.");
+                setIdentityRepairReason(null);
+                alert(
+                    alreadySynced
+                        ? "Your current vault already matches your cloud identity. This repair only affects future encryption. Older direct messages or stale group memberships created for a previous vault cannot be recovered automatically."
+                        : "Your current vault is now synced to your cloud identity for future encryption. Older direct messages or stale group memberships created for a previous vault still need another member or admin to resend or re-add you."
+                );
+            } else {
+                throw new Error("Your identity record could not be found in Appwrite.");
             }
         } catch (e) {
             console.error("Identity repair failed:", e);
-            alert("Failed to repair identity. Please check your connection.");
+            alert(e instanceof Error ? e.message : "Failed to repair identity. Please check your connection.");
         } finally {
             setIsRepairing(false);
         }
@@ -379,7 +442,7 @@ export const Dashboard: React.FC = () => {
             let decrypted: string | null = null;
             let mediaData: any = null;
 
-            if (!privateKey) {
+            if (!availablePrivateKeys.length) {
                 decrypted = "[Vault Locked]";
             } else {
                 const isMedia = msg.payload.type === 'voice' || msg.payload.type === 'file';
@@ -389,8 +452,7 @@ export const Dashboard: React.FC = () => {
                 if (!group) return; 
                 
                 try {
-                    const decryptedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(group.encrypted_group_key, privateKey!);
-                    const groupKey = await KeyManager.importSecretKey(decryptedKeyB64);
+                    const groupKey = await decryptGroupKeyForChat(group);
                     
                     const payload = msg.payload.ciphertext ? msg.payload : (typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload);
 
@@ -432,14 +494,19 @@ export const Dashboard: React.FC = () => {
                     }
 
                     if (isMedia) {
-                        const decryptedKeyBase64 = await HybridEncryptor.decrypt(dmKeyToUse, privateKey!);
+                        const decryptedKeyBase64 = await withPrivateKeyFallback((candidateKey) => (
+                            HybridEncryptor.decrypt({ encryptedKey: dmKeyToUse }, candidateKey)
+                        ));
                         mediaData = { ...msg.payload, decryptedKeyBase64 };
                     } else {
-                        decrypted = await HybridEncryptor.decrypt({ ...msg.payload, encryptedKey: dmKeyToUse }, privateKey!);
+                        decrypted = await withPrivateKeyFallback((candidateKey) => (
+                            HybridEncryptor.decrypt({ ...msg.payload, encryptedKey: dmKeyToUse }, candidateKey)
+                        ));
                     }
                 } catch (decErr: any) {
                     if (decErr.message === 'IDENTITY_MISMATCH' || decErr.name === 'OperationError') {
-                        decrypted = "[Encrypted for 🔐 Old Identity]";
+                        flagDirectIdentityIssue();
+                        decrypted = OLD_IDENTITY_TEXT;
                     } else {
                         console.error("DM Decryption failed:", decErr);
                         decrypted = "[Decryption Failed]";
@@ -500,12 +567,14 @@ export const Dashboard: React.FC = () => {
             // Signal Session Repair for LIVE message
             if (isMismatch && msg.is_group) {
                 requestGroupKeySync(msg.recipient_id);
+            } else if (isMismatch) {
+                flagDirectIdentityIssue();
             }
 
             setMessages(prev => [...prev.filter(m => m.$id !== msg.$id), { 
                 ...msg.payload, 
                 is_waiting: isMismatch && msg.is_group,
-                text: isMismatch ? "[Waiting for this message. This may take a while.]" : "[Decryption Failed]", 
+                text: isMismatch ? (msg.is_group ? GROUP_WAITING_TEXT : OLD_IDENTITY_TEXT) : "[Decryption Failed]", 
                 sender_id: msg.sender_id, 
                 $id: msg.$id 
             }]);
@@ -530,14 +599,13 @@ export const Dashboard: React.FC = () => {
             if (msg.is_group) {
                 const group = groups.find(g => g.$id === msg.recipient_id);
                 if (group) {
-                    const decryptedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(group.encrypted_group_key, privateKey!);
-                    const groupKey = await KeyManager.importSecretKey(decryptedKeyB64);
+                    const groupKey = await decryptGroupKeyForChat(group);
                     decrypted = await HybridEncryptor.decryptSymmetric(msg.payload, groupKey);
                 } else {
                     decrypted = "[Encrypted Group Message]";
                 }
             } else {
-                decrypted = await HybridEncryptor.decrypt(msg.payload, privateKey!);
+                decrypted = await withPrivateKeyFallback((candidateKey) => HybridEncryptor.decrypt(msg.payload, candidateKey));
             }
             setMessages(prev => prev.map(m => m.$id === msg.messageId ? { ...m, text: decrypted, is_edited: true } : m));
         } catch (e) { console.error("Edit decryption failed", e); }
@@ -575,13 +643,15 @@ export const Dashboard: React.FC = () => {
 
     const handleKeySyncRequest = async (msg: any) => {
         // If someone requests a group key, and we have it, we re-encrypt it for them
-        if (!privateKey) return;
+        if (!availablePrivateKeys.length) return;
         try {
             const group = groups.find(g => g.$id === msg.groupId);
             if (!group) return;
 
             // 1. Get the current Group Key
-            const decryptedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(group.encrypted_group_key, privateKey);
+            const decryptedKeyB64 = await withPrivateKeyFallback((candidateKey) => (
+                HybridEncryptor.decryptKeyWithRSA(group.encrypted_group_key, candidateKey)
+            ));
             const rawKey = Uint8Array.from(atob(decryptedKeyB64), c => c.charCodeAt(0)).buffer;
 
             // 2. Fetch the requester's latest public key
@@ -740,8 +810,7 @@ export const Dashboard: React.FC = () => {
             if (isGroup) {
                 try {
                     const activeGroup = getResolvedGroupChat(selectedChat);
-                    const decryptedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(activeGroup.encrypted_group_key, privateKey);
-                    const groupKey = await KeyManager.importSecretKey(decryptedKeyB64);
+                    const groupKey = await decryptGroupKeyForChat(activeGroup);
                     encrypted = await HybridEncryptor.encryptSymmetric(content, groupKey);
                 } catch (e: any) {
                     console.error("[Security] Group key decryption failed:", e);
@@ -860,8 +929,7 @@ export const Dashboard: React.FC = () => {
             if (!chatTargetId) return;
             if (isGroup) {
                 const activeGroup = getResolvedGroupChat(selectedChat);
-                const decryptedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(activeGroup.encrypted_group_key, privateKey!);
-                const groupKey = await KeyManager.importSecretKey(decryptedKeyB64);
+                const groupKey = await decryptGroupKeyForChat(activeGroup);
                 encrypted = await HybridEncryptor.encryptSymmetric(newMessage, groupKey);
             } else {
                 const recipientKey = await KeyManager.importPublicKey(selectedChat.public_key);
@@ -944,8 +1012,7 @@ export const Dashboard: React.FC = () => {
             let encryptedKeyPayload;
             if (selectedChat.type === 'group') {
                 const activeGroup = getResolvedGroupChat(selectedChat);
-                const decryptedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(activeGroup.encrypted_group_key, privateKey!);
-                const groupKey = await KeyManager.importSecretKey(decryptedKeyB64);
+                const groupKey = await decryptGroupKeyForChat(activeGroup);
                 const rawKey = await window.crypto.subtle.exportKey("raw", fileKey);
                 const rawKeyB64 = btoa(String.fromCharCode(...new Uint8Array(rawKey)));
                 encryptedKeyPayload = await HybridEncryptor.encryptSymmetric(rawKeyB64, groupKey);
@@ -1080,14 +1147,16 @@ export const Dashboard: React.FC = () => {
                     let mediaData: any = null;
                     const isMedia = m.type === 'voice' || m.type === 'file';
 
-                    if (!privateKey && !isGroup) {
+                    if (!availablePrivateKeys.length && !isGroup) {
                         text = "[Vault Locked]";
                     } else if (isGroup) {
                         try {
                             const group = groups.find(g => g.$id === m.receiver_id || g.$id === selectedChat?.$id);
                             if (group) {
                                 const groupKeyStr = group.encrypted_group_key || group.encrypted_key;
-                                const decryptedGroupKey = await HybridEncryptor.decryptKeyWithRSA(groupKeyStr, privateKey!);
+                                const decryptedGroupKey = await withPrivateKeyFallback((candidateKey) => (
+                                    HybridEncryptor.decryptKeyWithRSA(groupKeyStr, candidateKey)
+                                ));
                                 const groupKey = await KeyManager.importSecretKey(decryptedGroupKey);
                                 
                                 const keysRaw = m.encrypted_key || m.encryptedKey;
@@ -1128,7 +1197,7 @@ export const Dashboard: React.FC = () => {
                             return { 
                                 ...m, 
                                 is_waiting: isMismatch,
-                                text: isMismatch ? "[Waiting for this message. This may take a while.]" : "[Encrypted Group Message]" 
+                                text: isMismatch ? GROUP_WAITING_TEXT : "[Encrypted Group Message]" 
                             };
                         }
                     } else {
@@ -1163,28 +1232,31 @@ export const Dashboard: React.FC = () => {
                             }
                             
                             if (isMedia) {
-                                const decryptedKeyBase64 = await HybridEncryptor.decrypt({ encryptedKey: dmKeyToUse }, privateKey!);
+                                const decryptedKeyBase64 = await withPrivateKeyFallback((candidateKey) => (
+                                    HybridEncryptor.decrypt({ encryptedKey: dmKeyToUse }, candidateKey)
+                                ));
                                 mediaData = { ...m, ...msgPayload, decryptedKeyBase64 };
                             } else {
-                                text = await HybridEncryptor.decrypt({ 
-                                    ...m, 
-                                    ...msgPayload, 
-                                    encryptedKey: dmKeyToUse,
-                                    encrypted_key: dmKeyToUse // Force use of resolved key
-                                }, privateKey!);
+                                text = await withPrivateKeyFallback((candidateKey) => (
+                                    HybridEncryptor.decrypt({
+                                        ...m,
+                                        ...msgPayload,
+                                        encryptedKey: dmKeyToUse,
+                                        encrypted_key: dmKeyToUse
+                                    }, candidateKey)
+                                ));
                             }
                         } catch (decErr: any) {
                             const isMismatch = decErr.name === "OperationError" || decErr.message === 'IDENTITY_MISMATCH';
-                            
-                            // Signal Session Repair (WhatsApp Style)
-                            if (isMismatch && isGroup) {
-                                requestGroupKeySync(m.receiver_id);
+
+                            if (isMismatch) {
+                                flagDirectIdentityIssue();
                             }
 
                             return { 
                                 ...m, 
                                 is_waiting: isMismatch && isGroup,
-                                text: isMismatch ? "[Waiting for this message. This may take a while.]" : "[Decryption Failed]" 
+                                text: isMismatch ? OLD_IDENTITY_TEXT : "[Decryption Failed]" 
                             };
                         }
                     }
@@ -1201,13 +1273,15 @@ export const Dashboard: React.FC = () => {
                     
                     if (isMismatch && m.is_group) {
                         requestGroupKeySync(m.receiver_id || selectedChat?.$id);
+                    } else if (isMismatch) {
+                        flagDirectIdentityIssue();
                     }
                     const isMalformed = err.message.includes("Missing ciphertext");
                     
                     return { 
                         ...m, 
                         is_waiting: isMismatch && m.is_group,
-                        text: isMismatch ? "[Waiting for this message. This may take a while.]" : 
+                        text: isMismatch ? (m.is_group ? GROUP_WAITING_TEXT : OLD_IDENTITY_TEXT) : 
                               isMalformed ? "[Malformed Encrypted Payload]" :
                               "[Decryption Failed]" 
                     };
@@ -1219,11 +1293,14 @@ export const Dashboard: React.FC = () => {
 
     const handleUnlock = async (pin: string) => {
         try {
-            const hasKeys = await KeyManager.getPublicKey();
-            
-            if (hasKeys) {
+            try {
                 await unlockKeys(pin);
-            } else {
+            } catch (unlockError: any) {
+                const canSetupNewVault = unlockError?.message?.includes("No security keys found on this device.");
+                if (!canSetupNewVault) {
+                    throw unlockError;
+                }
+
                 if (setupNewVault) {
                     await setupNewVault(pin);
                 } else {
@@ -1392,14 +1469,19 @@ export const Dashboard: React.FC = () => {
                             </button>
                         ))}
                     </div>
-                    {isKeyMismatch && (
+                    {(isKeyMismatch || identityRepairReason === 'old_identity_message') && (
                         <div className="mb-4 p-4 rounded-2xl bg-primary-500/10 border border-primary-500/30 flex flex-col gap-3">
                             <div className="flex items-start gap-3">
                                 <ShieldAlert className="w-5 h-5 text-primary-500 shrink-0 mt-0.5" />
                                 <div>
-                                    <h4 className="text-sm font-bold text-slate-100">Identity Mismatch</h4>
+                                    <h4 className="text-sm font-bold text-slate-100">
+                                        {identityRepairReason === 'old_identity_message' && !isKeyMismatch ? 'Old Identity Detected' : 'Identity Mismatch'}
+                                    </h4>
                                     <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                                        Your local vault keys don't match your cloud record. Other users may be encrypting messages for your old identity.
+                                        {identityRepairReason === 'old_identity_message' && !isKeyMismatch
+                                            ? 'Some direct messages were encrypted for an older vault. Repair syncs your current public key for future messages, but it cannot decrypt historical messages or stale group memberships.'
+                                            : "Your local vault keys don't match your cloud record. Other users may be encrypting messages for your old identity."
+                                        }
                                     </p>
                                 </div>
                             </div>

@@ -1,6 +1,10 @@
 import React from 'react';
+import { Query } from 'appwrite';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Image, Files, BellOff, Flag, ShieldCheck, Phone, Video, Search } from 'lucide-react';
+import { X, Image, Files, BellOff, Flag, ShieldCheck, Phone, Video, Search, Loader2 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { KeyManager } from '../crypto/keyManager';
+import { databases, APPWRITE_CONFIG } from '../lib/appwrite';
 
 interface ProfileSidePanelProps {
     isOpen: boolean;
@@ -11,37 +15,105 @@ interface ProfileSidePanelProps {
     sharedGroups?: any[];
 }
 
-export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({ 
-    isOpen, 
-    onClose, 
-    item, 
-    messages, 
+export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
+    isOpen,
+    onClose,
+    item,
+    messages,
     getAvatarUrl,
     sharedGroups = []
 }) => {
-    if (!item) return null;
-
-    const isGroup = item.type === 'group' || !!item.group_id;
-    const name = item.username || item.name || "Unknown";
-    const bio = item.bio || item.description || (isGroup ? "Group description" : "Hey there! I'm using SecureVault.");
-    const avatarUrl = getAvatarUrl(isGroup ? item.$id : item.avatar_id);
+    const { user } = useAuth();
+    const [isGeneratingCode, setIsGeneratingCode] = React.useState(false);
+    const [securityCode, setSecurityCode] = React.useState<string | null>(null);
+    const [securityMessage, setSecurityMessage] = React.useState<string | null>(null);
+    const isGroup = item?.type === 'group' || !!item?.group_id;
+    const name = item?.username || item?.name || "Unknown";
+    const bio = item?.bio || item?.description || (isGroup ? "Group description" : "Hey there! I'm using SecureVault.");
+    const avatarUrl = item ? getAvatarUrl(isGroup ? item.$id : item.avatar_id) : undefined;
 
     // Filter shared media
     const mediaMessages = messages.filter(m => m.type === 'file' || m.type === 'voice' || m.gif_url);
+
+    React.useEffect(() => {
+        setIsGeneratingCode(false);
+        setSecurityCode(null);
+        setSecurityMessage(null);
+    }, [isOpen, item?.$id, item?.user_id]);
+
+    const buildSecurityCode = async (localKey: string, remoteKey: string) => {
+        const encoder = new TextEncoder();
+        const [firstKey, secondKey] = [localKey.trim(), remoteKey.trim()].sort();
+        const digest = await window.crypto.subtle.digest("SHA-256", encoder.encode(`${firstKey}:${secondKey}`));
+        const hex = Array.from(new Uint8Array(digest))
+            .map(byte => byte.toString(16).padStart(2, '0'))
+            .join('')
+            .toUpperCase();
+        return hex.match(/.{1,4}/g)?.slice(0, 8).join(' ') || hex;
+    };
+
+    const handleVerifySecurityCode = async () => {
+        if (isGroup) {
+            setSecurityCode(null);
+            setSecurityMessage("Security code verification is available for one-to-one chats only.");
+            return;
+        }
+
+        if (!user) {
+            setSecurityCode(null);
+            setSecurityMessage("You need an active session before verifying a security code.");
+            return;
+        }
+
+        setIsGeneratingCode(true);
+        try {
+            const localPublicKey = await KeyManager.getPublicKey();
+            if (!localPublicKey) {
+                throw new Error("Unlock or restore your vault on this device before verifying a security code.");
+            }
+
+            let remotePublicKey = item.public_key || item.publicKey || null;
+            if (!remotePublicKey && item.user_id) {
+                const res = await databases.listDocuments(
+                    APPWRITE_CONFIG.DATABASE_ID,
+                    APPWRITE_CONFIG.COLLECTION_USERS,
+                    [Query.equal("user_id", item.user_id), Query.limit(1)]
+                );
+                if (res.total > 0) {
+                    remotePublicKey = res.documents[0].public_key || res.documents[0].publicKey || null;
+                }
+            }
+
+            if (!remotePublicKey) {
+                throw new Error("This contact has not published a current public key yet, so there is no security code to compare.");
+            }
+
+            const code = await buildSecurityCode(localPublicKey, remotePublicKey);
+            setSecurityCode(code);
+            setSecurityMessage(`Compare this code with ${name}. If it matches on both devices, your one-to-one chat keys line up.`);
+        } catch (error: any) {
+            setSecurityCode(null);
+            setSecurityMessage(error?.message || "Failed to generate the security code for this chat.");
+        } finally {
+            setIsGeneratingCode(false);
+        }
+    };
+
+    if (!item) return null;
 
     return (
         <AnimatePresence>
             {isOpen && (
                 <>
                     {/* Dark overlay for mobile */}
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="fixed inset-0 bg-black/20 backdrop-blur-[2px] z-40 md:hidden"
                         onClick={onClose}
                     />
-                    
+
                     <motion.div
                         initial={{ x: '100%' }}
                         animate={{ x: 0 }}
@@ -64,7 +136,7 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                             {/* Hero Section */}
                             <div className="bg-white p-8 flex flex-col items-center border-b border-slate-100 shadow-sm relative overflow-hidden">
                                 <div className="absolute top-0 left-0 w-full h-24 bg-linear-to-br from-blue-500/10 to-indigo-500/10 opacity-50" />
-                                
+
                                 <div className="relative group mb-6">
                                     <div className="w-40 h-40 rounded-[3rem] bg-slate-100 border-4 border-white shadow-2xl overflow-hidden flex items-center justify-center text-5xl font-black text-blue-500 transition-transform group-hover:scale-[1.02]">
                                         {avatarUrl ? (
@@ -74,7 +146,7 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                         )}
                                     </div>
                                 </div>
-                                
+
                                 <div className="text-center space-y-2">
                                     <h3 className="text-2xl font-black italic tracking-tighter text-slate-900">{name}</h3>
                                     <p className="text-sm font-medium text-slate-500 tracking-tight">
@@ -101,23 +173,23 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
 
                             {/* Info Sections */}
                             <div className="p-4 space-y-4 pb-12">
-            {/* Bio Section */}
-            <section className="bg-white p-6 rounded-4xl border border-slate-100 shadow-sm space-y-4">
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500">
-                        <Phone className="w-4 h-4" />
-                    </div>
-                    <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-700">Phone Number</h4>
-                </div>
-                <p className="text-sm text-slate-700 leading-relaxed font-medium">
-                    {item.phone || "Not provided"}
-                </p>
-                <p className="text-[10px] text-slate-400 font-medium leading-normal italic text-center">
-                    Used for discovery and secure E2EE key lookup.
-                </p>
-            </section>
+                                {/* Bio Section */}
+                                <section className="bg-white p-6 rounded-4xl border border-slate-100 shadow-sm space-y-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500">
+                                            <Phone className="w-4 h-4" />
+                                        </div>
+                                        <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-700">Phone Number</h4>
+                                    </div>
+                                    <p className="text-sm text-slate-700 leading-relaxed font-medium">
+                                        {item.phone || "Not provided"}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 font-medium leading-normal italic text-center">
+                                        Used for discovery and secure E2EE key lookup.
+                                    </p>
+                                </section>
 
-            <section className="bg-white p-6 rounded-4xl border border-slate-100 shadow-sm space-y-4">
+                                <section className="bg-white p-6 rounded-4xl border border-slate-100 shadow-sm space-y-4">
                                     <div className="space-y-1">
                                         <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">About / Status</h4>
                                         <p className="text-sm text-slate-700 leading-relaxed font-medium">{bio}</p>
@@ -138,7 +210,7 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                             {mediaMessages.length} items
                                         </button>
                                     </div>
-                                    
+
                                     {mediaMessages.length > 0 ? (
                                         <div className="grid grid-cols-3 gap-2">
                                             {mediaMessages.slice(0, 6).map((m, i) => (
@@ -169,9 +241,25 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                     <p className="text-[11px] text-slate-500 leading-normal font-medium">
                                         Messages and calls are end-to-end encrypted. No one outside of this chat, not even SecureVault, can read or listen to them.
                                     </p>
-                                    <button className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline">
-                                        Verify Security Code
+                                    <button
+                                        onClick={handleVerifySecurityCode}
+                                        disabled={isGeneratingCode}
+                                        className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline disabled:text-slate-300 disabled:no-underline disabled:cursor-not-allowed flex items-center gap-2"
+                                    >
+                                        {isGeneratingCode && <Loader2 className="w-3 h-3 animate-spin" />}
+                                        {isGeneratingCode ? 'Generating Code...' : 'Verify Security Code'}
                                     </button>
+                                    {securityCode && (
+                                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Security Code</p>
+                                            <p className="text-sm font-mono font-bold tracking-[0.2em] text-slate-800 `wrap-break-words`">{securityCode}</p>
+                                        </div>
+                                    )}
+                                    {securityMessage && (
+                                        <p className={`text-[10px] font-medium leading-relaxed ${securityCode ? 'text-slate-400' : 'text-amber-600'}`}>
+                                            {securityMessage}
+                                        </p>
+                                    )}
                                 </section>
 
                                 {/* Groups In Common */}
@@ -224,12 +312,12 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
 // Internal icon helpers
 const UsersIcon = ({ className }: { className?: string }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </svg>
 );
 
 const Mic = ({ className }: { className?: string }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/>
+        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" x2="12" y1="19" y2="22" />
     </svg>
 );

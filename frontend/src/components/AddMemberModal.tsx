@@ -15,12 +15,13 @@ interface AddMemberModalProps {
 }
 
 export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose, group, onAdded }) => {
-    const { user, privateKey } = useAuth();
+    const { user, privateKey, legacyPrivateKeys } = useAuth();
     const [searchQuery, setSearchQuery] = useState("");
     const [availableUsers, setAvailableUsers] = useState<any[]>([]);
     const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
+    const availablePrivateKeys = [privateKey, ...legacyPrivateKeys].filter((key): key is CryptoKey => !!key);
 
     useEffect(() => {
         if (isOpen) {
@@ -55,7 +56,7 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose,
     };
 
     const handleAddMembers = async () => {
-        if (selectedUsers.length === 0 || !privateKey) return;
+        if (selectedUsers.length === 0 || !availablePrivateKeys.length) return;
         setIsAdding(true);
         try {
             // 1. Decrypt the group AES key from my own membership record
@@ -70,21 +71,35 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose,
             const myEncryptedKey = myMembershipRes.documents[0].encrypted_group_key;
             
             // Recover the RAW Base64 AES key
-            let rawAesKeyB64;
+            let rawAesKeyB64: string | null = null;
             try {
                 if (!myEncryptedKey) throw new Error("Membership record is missing the group security key.");
-                rawAesKeyB64 = await HybridEncryptor.decryptKeyWithRSA(myEncryptedKey, privateKey);
+                let lastError: any = null;
+                for (const candidateKey of availablePrivateKeys) {
+                    try {
+                        rawAesKeyB64 = await HybridEncryptor.decryptKeyWithRSA(myEncryptedKey, candidateKey);
+                        break;
+                    } catch (error) {
+                        lastError = error;
+                    }
+                }
+                if (!rawAesKeyB64 && lastError) {
+                    throw lastError;
+                }
+                if (!rawAesKeyB64) {
+                    throw new Error("Group membership key unavailable.");
+                }
             } catch (decErr: any) {
                 console.error("[AddMember] Group Key Decryption Failed:", {
                     error: decErr.message || decErr.name,
                     membershipId: myMembershipRes.documents[0].$id,
-                    hasPrivateKey: !!privateKey
+                    hasPrivateKey: availablePrivateKeys.length > 0
                 });
                 
                 const isMismatch = decErr.name === "OperationError" || decErr.message.includes("mismatch") || decErr.message.includes("unlock");
                 
                 const userMessage = isMismatch 
-                    ? "Security Vault Mismatch: Your identity has changed since you joined this group. Please use the 'Repair My Identity' tool in the sidebar or ask another admin to re-add you."
+                    ? "Security Vault Mismatch: Your current vault cannot decrypt this group's membership key. Repairing your cloud identity only affects future encryption. Another admin with valid access must re-add you to this group, or the group must be recreated."
                     : `Security Error: Unable to unlock group vault. (${decErr.message})`;
                     
                 throw new Error(userMessage);

@@ -98,6 +98,8 @@ class AppManager:
         print(f"\nAligning '{coll_users}' collection...")
         self.ensure_attribute(coll_users, "phone", "string", 20)
         self.ensure_attribute(coll_users, "public_key", "string", 4000)
+        self.ensure_attribute(coll_users, "vault_backup", "string", 12000)
+        self.ensure_attribute(coll_users, "legacy_vault_backups", "string", 30000)
         self.ensure_attribute(coll_users, "username", "string", 100)
         self.ensure_attribute(coll_users, "email", "string", 100)
 

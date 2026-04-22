@@ -58,6 +58,29 @@ export const AuthPage: React.FC = () => {
                 const keys = await KeyManager.generateKeyPair();
                 await KeyManager.storePrivateKey(keys.privateKey, keys.publicKey, pin);
                 const publicKeyStr = await KeyManager.exportPublicKey(keys.publicKey);
+                const vaultBackup = JSON.stringify(
+                    await KeyManager.createVaultBackupRecord(keys.privateKey, publicKeyStr, pin)
+                );
+                const profilePayload = {
+                    user_id: activeId,
+                    username: username,
+                    email: email,
+                    phone: phone,
+                    public_key: publicKeyStr,
+                    vault_backup: vaultBackup,
+                    legacy_vault_backups: "[]",
+                    role: 'user',
+                    status: 'active'
+                };
+                const fallbackProfilePayload = {
+                    user_id: activeId,
+                    username: username,
+                    email: email,
+                    phone: phone,
+                    public_key: publicKeyStr,
+                    role: 'user',
+                    status: 'active'
+                };
 
                 // Ensure logged in to write metadata
                 try { await account.get(); } catch { await loginEmail(email, password); }
@@ -90,28 +113,45 @@ export const AuthPage: React.FC = () => {
                         APPWRITE_CONFIG.DATABASE_ID,
                         APPWRITE_CONFIG.COLLECTION_USERS,
                         activeId,
-                        {
-                            user_id: activeId,
-                            username: username,
-                            email: email,
-                            phone: phone, // Save the phone number
-                            public_key: publicKeyStr,
-                            role: 'user',
-                            status: 'active'
-                        }
+                        profilePayload
                     );
                 } catch (e: any) {
                     if (e.code === 409) {
                         console.log("Metadata already exists, updating keys...");
-                        await databases.updateDocument(
+                        try {
+                            await databases.updateDocument(
+                                APPWRITE_CONFIG.DATABASE_ID,
+                                APPWRITE_CONFIG.COLLECTION_USERS,
+                                activeId,
+                                { 
+                                    public_key: publicKeyStr,
+                                    vault_backup: vaultBackup,
+                                    username: username,
+                                    phone: phone
+                                }
+                            );
+                        } catch (updateError: any) {
+                            if (updateError?.message?.includes("vault_backup") || updateError?.message?.includes("legacy_vault_backups")) {
+                                await databases.updateDocument(
+                                    APPWRITE_CONFIG.DATABASE_ID,
+                                    APPWRITE_CONFIG.COLLECTION_USERS,
+                                    activeId,
+                                    {
+                                        public_key: publicKeyStr,
+                                        username: username,
+                                        phone: phone
+                                    }
+                                );
+                            } else {
+                                throw updateError;
+                            }
+                        }
+                    } else if (e?.message?.includes("vault_backup") || e?.message?.includes("legacy_vault_backups")) {
+                        await databases.createDocument(
                             APPWRITE_CONFIG.DATABASE_ID,
                             APPWRITE_CONFIG.COLLECTION_USERS,
                             activeId,
-                            { 
-                                public_key: publicKeyStr,
-                                username: username, // Sync username too
-                                phone: phone
-                            }
+                            fallbackProfilePayload
                         );
                     } else {
                         throw new Error("Account created but profile sync failed. Please try logging in.");

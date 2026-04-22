@@ -25,9 +25,10 @@ export const StatusViewer: React.FC<StatusViewerProps> = ({
     const [isPaused, setIsPaused] = useState(false);
     const [decryptedContent, setDecryptedContent] = useState<{ url?: string, text?: string }>({});
     const [isLoading, setIsLoading] = useState(false);
-    const { privateKey } = useAuth();
+    const { privateKey, legacyPrivateKeys } = useAuth();
     const progressRef = useRef<number>(0);
     const timerRef = useRef<any>(null);
+    const availablePrivateKeys = [privateKey, ...legacyPrivateKeys].filter((key): key is CryptoKey => !!key);
 
     const DURATION = 5000; // 5 seconds per status
 
@@ -90,7 +91,7 @@ export const StatusViewer: React.FC<StatusViewerProps> = ({
             // 2. Fetch encrypted status key shared with US (works for self too if local key missing)
             if (!statusKey) {
                 try {
-                    if (!privateKey) throw new Error("VAULT_LOCKED");
+                    if (!availablePrivateKeys.length) throw new Error("VAULT_LOCKED");
 
                     const keyRes = await databases.listDocuments(
                         APPWRITE_CONFIG.DATABASE_ID, 
@@ -105,10 +106,25 @@ export const StatusViewer: React.FC<StatusViewerProps> = ({
                     
                     if (keyRes.documents.length > 0) {
                         const encryptedSharedKey = keyRes.documents[0].encrypted_key;
-                        const decryptedSharedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(
-                            encryptedSharedKey, 
-                            privateKey
-                        );
+                        let decryptedSharedKeyB64: string | null = null;
+                        let lastError: any = null;
+                        for (const candidateKey of availablePrivateKeys) {
+                            try {
+                                decryptedSharedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(
+                                    encryptedSharedKey,
+                                    candidateKey
+                                );
+                                break;
+                            } catch (error) {
+                                lastError = error;
+                            }
+                        }
+                        if (!decryptedSharedKeyB64 && lastError) {
+                            throw lastError;
+                        }
+                        if (!decryptedSharedKeyB64) {
+                            throw new Error("Shared status key unavailable.");
+                        }
                         statusKey = await KeyManager.importSecretKey(decryptedSharedKeyB64);
                     }
                 } catch (err: any) {

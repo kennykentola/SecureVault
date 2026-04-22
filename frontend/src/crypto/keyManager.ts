@@ -1,6 +1,12 @@
 const DB_NAME = 'E2EEMessagingDB';
 const STORE_NAME = 'KeysStore';
 
+export interface VaultBackupRecord {
+    public_key: string;
+    backup: string;
+    created_at: string;
+}
+
 // Initialize IndexedDB
 const initDB = (): Promise<IDBDatabase> => {
     return new Promise((resolve, reject) => {
@@ -147,6 +153,15 @@ export const KeyManager = {
         };
     },
 
+    createVaultBackupRecord: async (privateKey: CryptoKey, publicKey: string, pin: string): Promise<VaultBackupRecord> => {
+        const { backup } = await KeyManager.packagePrivateKeyForBackup(privateKey, pin);
+        return {
+            public_key: publicKey,
+            backup,
+            created_at: new Date().toISOString()
+        };
+    },
+
     // Store Private Key securely in IndexedDB (Encrypted with PIN)
     storePrivateKey: async (privateKey: CryptoKey, publicKey: CryptoKey, pin: string): Promise<void> => {
         const exported = await window.crypto.subtle.exportKey("pkcs8", privateKey);
@@ -273,8 +288,7 @@ export const KeyManager = {
         console.warn("ALL LOCAL SECURITY KEYS HAVE BEEN WIPED.");
     },
 
-    // Import packaged backup into local storage
-    importBackup: async (backupJson: string, pin: string): Promise<CryptoKey> => {
+    restorePrivateKeyFromBackup: async (backupJson: string, pin: string): Promise<CryptoKey> => {
         try {
             const data = JSON.parse(backupJson);
             const encryptedKey = new Uint8Array(atob(data.encryptedKey).split('').map(c => c.charCodeAt(0)));
@@ -288,23 +302,23 @@ export const KeyManager = {
                 encryptedKey
             );
 
-            const privateKey = await window.crypto.subtle.importKey(
+            return await window.crypto.subtle.importKey(
                 "pkcs8",
                 decrypted,
                 { name: "RSA-OAEP", hash: "SHA-256" },
                 true,
                 ["decrypt"]
             );
+        } catch (e) {
+            console.error("Backup key decryption failed:", e);
+            throw new Error("Invalid security PIN. Please try again.");
+        }
+    },
 
-            // Successfully decrypted! Store locally.
-            const db = await initDB();
-            const tx = db.transaction(STORE_NAME, 'readwrite');
-            tx.objectStore(STORE_NAME).put({
-                encryptedKey: decrypted,
-                salt,
-                iv,
-            }, 'privateKey');
-
+    // Import packaged backup into local storage
+    importBackup: async (backupJson: string, pin: string): Promise<CryptoKey> => {
+        try {
+            const privateKey = await KeyManager.restorePrivateKeyFromBackup(backupJson, pin);
             return privateKey;
         } catch (e) {
             console.error("Backup restoration failed:", e);
