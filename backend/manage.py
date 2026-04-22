@@ -107,6 +107,14 @@ class AppManager:
         self.ensure_index(coll_users, "idx_ft_email", "fulltext", ["email"])
         self.ensure_index(coll_users, "idx_ft_phone", "fulltext", ["phone"])
 
+        # 3. FIX STATUS_KEYS COLLECTION
+        coll_status_keys = "status_keys"
+        print(f"\nAligning '{coll_status_keys}' collection...")
+        self.ensure_attribute(coll_status_keys, "poster_id", "string", 100)
+        self.ensure_attribute(coll_status_keys, "recipient_id", "string", 100)
+        self.ensure_attribute(coll_status_keys, "encrypted_key", "string", 5000)
+        self.ensure_attribute(coll_status_keys, "created_at", "string", 100)
+
         print("\n--- SCHEMA UPDATE COMPLETE ---")
 
     # --- CHECK COMMANDS ---

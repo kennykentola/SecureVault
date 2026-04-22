@@ -110,6 +110,55 @@ def recipient_is_group(message: dict, recipient_id: Optional[str]) -> bool:
     except Exception:
         return False
 
+
+def build_message_payloads(user_id: str, recipient_id: str, payload: dict, save_key: str, is_group: bool):
+    legacy_payload = {
+        "sender_id": user_id,
+        "receiver_id": recipient_id,
+        "ciphertext": payload.get("ciphertext", ""),
+        "encrypted_key": save_key,
+        "iv": payload.get("iv", ""),
+        "hash": payload.get("hash", ""),
+        "timestamp": payload.get("timestamp", ""),
+        "type": payload.get("type", "text"),
+    }
+
+    extended_payload = dict(legacy_payload)
+    extended_payload["group_id"] = recipient_id if is_group else ""
+    extended_payload["sender_name"] = payload.get("sender_name", "")
+
+    return extended_payload, legacy_payload
+
+
+def persist_message_document(primary_payload: dict, fallback_payload: dict):
+    try:
+        return databases.create_document(
+            APPWRITE_DATABASE_ID,
+            APPWRITE_MESSAGES_COLLECTION,
+            ID.unique(),
+            primary_payload,
+            permissions=[Permission.read(Role.users())]
+        )
+    except Exception as primary_error:
+        print(f"[WS DB Error] Primary persistence failed: {primary_error}")
+
+        if primary_payload == fallback_payload:
+            return None
+
+        try:
+            saved_message = databases.create_document(
+                APPWRITE_DATABASE_ID,
+                APPWRITE_MESSAGES_COLLECTION,
+                ID.unique(),
+                fallback_payload,
+                permissions=[Permission.read(Role.users())]
+            )
+            print("[WS DB Notice] Message persisted using legacy schema fallback.")
+            return saved_message
+        except Exception as fallback_error:
+            print(f"[WS DB Error] Legacy persistence failed: {fallback_error}")
+            return None
+
 app = FastAPI(title="SecureVault E2EE Backend")
 
 # CORS
@@ -277,33 +326,18 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     else:
                         save_key = json.dumps(enc_key) if isinstance(enc_key, dict) else enc_key
 
-                    # Map frontend packet to database schema
-                    db_payload = {
-                        "sender_id": user_id,
-                        "receiver_id": recipient_id, 
-                        "ciphertext": payload.get("ciphertext", ""),
-                        "encrypted_key": save_key, 
-                        "iv": payload.get("iv", ""),
-                        "hash": payload.get("hash", ""),
-                        "timestamp": payload.get("timestamp", ""),
-                        "type": payload.get("type", "text"),
-                        "group_id": recipient_id if is_group else "",
-                        "sender_name": payload.get("sender_name", "")
-                    }
+                    primary_payload, fallback_payload = build_message_payloads(
+                        user_id,
+                        recipient_id,
+                        payload,
+                        save_key,
+                        is_group,
+                    )
 
                     # Persist message to database
                     saved_message_id = msg.get("tempId")
-                    try:
-                        saved_message = databases.create_document(
-                            APPWRITE_DATABASE_ID,
-                            APPWRITE_MESSAGES_COLLECTION,
-                            ID.unique(),
-                            db_payload,
-                            permissions=[Permission.read(Role.users())]
-                        )
-                        saved_message_id = get_document_id(saved_message) or saved_message_id
-                    except Exception as e:
-                        print(f"[WS DB Error] Persistence failed: {e}")
+                    saved_message = persist_message_document(primary_payload, fallback_payload)
+                    saved_message_id = get_document_id(saved_message) or saved_message_id
 
                     outbound = build_outbound_message(
                         msg,

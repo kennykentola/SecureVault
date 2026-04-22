@@ -94,6 +94,32 @@ VITE_COLLECTION_REPORTS=your_reports_collection
 npm run dev
 ```
 
+### 4. Render Backend Deployment
+This repo now includes a root [render.yaml](/c:/Users/dell/Downloads/encripting_message_chat/render.yaml:1) for the FastAPI backend.
+
+If you are deploying or re-syncing the backend on Render:
+```bash
+Build Command: pip install -r requirements-render.txt
+Start Command: python main.py
+Root Directory: backend
+Health Check Path: /health
+```
+
+Required backend environment variables on Render:
+```env
+APPWRITE_ENDPOINT=https://fra.cloud.appwrite.io/v1
+APPWRITE_PROJECT_ID=your_project_id
+APPWRITE_API_KEY=your_secret_key
+APPWRITE_DATABASE_ID=your_database_id
+APPWRITE_BUCKET_ID=your_bucket_id
+```
+
+After redeploying the backend, run the schema alignment once with the same production environment variables:
+```bash
+cd backend
+python manage.py setup
+```
+
 ---
 
 ## 🗄️ Database Schema (Appwrite)
