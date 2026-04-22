@@ -13,12 +13,21 @@ export const useWebSocket = (userId: string | undefined, onMessage: (msg: any) =
             if (ws.current?.readyState === WebSocket.OPEN) return;
             
             setStatus('connecting');
-            const host = window.location.hostname;
-            // Fallback: If localhost fails, some Windows environments prefer 127.0.0.1
-            const targetHost = (host === 'localhost' && reconnectAttempts.current > 2) ? '127.0.0.1' : host;
             
-            console.log(`Connecting to WebSocket: ws://${targetHost}:8000/ws/${userId}`);
-            const socket = new WebSocket(`ws://${targetHost}:8000/ws/${userId}`);
+            // Configuration for backend URL
+            const envUrl = import.meta.env.VITE_BACKEND_WS_URL;
+            let wsUrl: string;
+
+            if (envUrl) {
+                wsUrl = `${envUrl}/ws/${userId}`;
+            } else {
+                const host = window.location.hostname;
+                const targetHost = (host === 'localhost' && reconnectAttempts.current > 2) ? '127.0.0.1' : host;
+                wsUrl = `ws://${targetHost}:8000/ws/${userId}`;
+            }
+            
+            console.log(`Connecting to WebSocket: ${wsUrl}`);
+            const socket = new WebSocket(wsUrl);
 
             socket.onopen = () => {
                 setStatus('connected');
@@ -37,16 +46,22 @@ export const useWebSocket = (userId: string | undefined, onMessage: (msg: any) =
 
             socket.onclose = (event) => {
                 setStatus('disconnected');
-                if (event.code !== 1000) { // Not a normal closure
+                if (event.code !== 1000 && event.code !== 1001) { // Not a normal closure
                     const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), maxReconnectDelay);
-                    console.log(`WebSocket Disconnected (Code: ${event.code}), retrying in ${delay}ms...`);
-                    setTimeout(connect, delay);
+                    console.warn(`WebSocket Disconnected (Code: ${event.code}), retrying in ${delay}ms...`);
+                    
+                    // Clear the current ref if it's the same socket to avoid interference
+                    if (ws.current === socket) ws.current = null;
+                    
+                    setTimeout(() => {
+                        if (reconnectAttempts.current > 0) connect();
+                    }, delay);
                     reconnectAttempts.current++;
                 }
             };
 
             socket.onerror = (err) => {
-                console.error("WebSocket Error:", err);
+                console.error("WebSocket Connection Error. This may be due to backend instability (1011) or network issues.", err);
                 socket.close();
             };
 

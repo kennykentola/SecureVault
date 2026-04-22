@@ -16,7 +16,7 @@ A high-fidelity, production-ready messaging platform designed with a **Zero-Trus
 ## 🎯 System Overview
 This system implements true **End-to-End Encryption (E2EE)**. Messages are encrypted on the sender's device and can only be decrypted by the intended recipient. Neither the server nor the database admins have access to the plaintext content or the private keys.
 
-![Secure Messaging UI Mockup](C:\Users\dell\.gemini\antigravity\brain\344a9fc5-4565-4a0b-8dd6-7fa72b6dc291\chat_app_mockup_1776466651998.png)
+![Secure Messaging UI Mockup](C:\Users\dell\Downloads\encripting_message_chat\click_feedback_1776510904380.png)
 
 ## 🔐 Cryptography Model
 Our security is based on a **Hybrid Cryptography** flow:
@@ -63,10 +63,10 @@ pip install -r requirements.txt
 **Configure `.env` in `/backend`**:
 ```env
 APPWRITE_ENDPOINT=https://fra.cloud.appwrite.io/v1
-APPWRITE_PROJECT_ID=e2eemessaging
+APPWRITE_PROJECT_ID=your_project_id
 APPWRITE_API_KEY=your_secret_key
-APPWRITE_DATABASE_ID=e2eemessaging
-APPWRITE_BUCKET_ID=e2eemessaging
+APPWRITE_DATABASE_ID=your_database_id
+APPWRITE_BUCKET_ID=your_bucket_id
 ```
 **Setup Collections**:
 ```bash
@@ -82,12 +82,12 @@ npm install
 **Configure `.env` in `/frontend`**:
 ```env
 VITE_APPWRITE_ENDPOINT=https://fra.cloud.appwrite.io/v1
-VITE_APPWRITE_PROJECT_ID=e2eemessaging
-VITE_APPWRITE_DATABASE_ID=e2eemessaging
-VITE_APPWRITE_BUCKET_ID=e2eemessaging
-VITE_COLLECTION_USERS=users_data
-VITE_COLLECTION_MESSAGES=messages
-VITE_COLLECTION_REPORTS=reports
+VITE_APPWRITE_PROJECT_ID=your_project_id
+VITE_APPWRITE_DATABASE_ID=your_database_id
+VITE_APPWRITE_BUCKET_ID=your_bucket_id
+VITE_COLLECTION_USERS=your_users_collection
+VITE_COLLECTION_MESSAGES=your_messages_collection
+VITE_COLLECTION_REPORTS=your_reports_collection
 ```
 **Start App**:
 ```bash

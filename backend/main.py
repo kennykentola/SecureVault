@@ -53,14 +53,17 @@ class ConnectionManager:
                 [Query.equal("user_id", user_id)]
             )
             if res.documents:
-                doc_id = res.documents[0].id
-                databases.update_document(
-                    APPWRITE_DATABASE_ID,
-                    "users_data",
-                    doc_id,
-                    {"status": status}
-                )
-                print(f"User {user_id} is now {status}")
+                # Safe access to document ID (handles both dict and object)
+                doc = res.documents[0]
+                doc_id = getattr(doc, '$id', None) or doc.get('$id')
+                if doc_id:
+                    databases.update_document(
+                        APPWRITE_DATABASE_ID,
+                        "users_data",
+                        doc_id,
+                        {"status": status}
+                    )
+                    print(f"User {user_id} is now {status}")
         except Exception as e:
             print(f"Failed to update status for {user_id}: {e}")
 
@@ -237,7 +240,10 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                         meta_res = databases.list_documents(APPWRITE_DATABASE_ID, "message_meta", [Query.equal("msg_id", msg_id)])
                         update_data = {"status": msg.get("status"), "updated_at": payload.get("timestamp") if payload else None}
                         if meta_res.documents:
-                            databases.update_document(APPWRITE_DATABASE_ID, "message_meta", meta_res.documents[0].id, update_data)
+                            doc = meta_res.documents[0]
+                            doc_id = getattr(doc, '$id', None) or doc.get('$id')
+                            if doc_id:
+                                databases.update_document(APPWRITE_DATABASE_ID, "message_meta", doc_id, update_data)
                         else:
                             databases.create_document(APPWRITE_DATABASE_ID, "message_meta", ID.unique(), {"msg_id": msg_id, **update_data})
                     except Exception as e:

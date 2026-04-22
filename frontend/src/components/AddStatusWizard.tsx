@@ -102,7 +102,7 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
                 await Promise.all(viewers.map(async (viewer) => {
                     if (viewer.public_key) {
                         try {
-                            const publicKey = await KeyManager.importPublicKey(JSON.parse(viewer.public_key));
+                            const publicKey = await KeyManager.importPublicKey(viewer.public_key);
                             const encryptedStatusKey = await HybridEncryptor.encryptKeyWithRSA(statusKeyExported, publicKey);
                             
                             await databases.createDocument(APPWRITE_CONFIG.DATABASE_ID, "status_keys", ID.unique(), {
@@ -119,7 +119,7 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
 
                 // Also share with self so we can view it
                 if (selfProfile?.public_key) {
-                    const selfPublicKey = await KeyManager.importPublicKey(JSON.parse(selfProfile.public_key));
+                    const selfPublicKey = await KeyManager.importPublicKey(selfProfile.public_key);
                     await databases.createDocument(APPWRITE_CONFIG.DATABASE_ID, "status_keys", ID.unique(), {
                         owner_id: user?.$id,
                         recipient_id: user?.$id,

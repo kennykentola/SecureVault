@@ -15,6 +15,7 @@ __pycache__/
 .env
 backend/.env
 frontend/.env
+DEPLOYMENT_INFO.md
 
 # Build outputs
 dist/

@@ -31,37 +31,54 @@ export const useWebRTC = (userId: string | undefined) => {
     useEffect(() => {
         if (!userId) return;
 
-        const newPeer = new Peer(userId, {
-            debug: 3,
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                    { urls: 'stun:stun2.l.google.com:19302' },
-                ]
-            }
-        });
+        const initPeer = () => {
+            const newPeer = new Peer(userId, {
+                debug: 3,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                    ]
+                }
+            });
 
-        newPeer.on('open', (id) => {
-            console.log('Peer connected with ID:', id);
-        });
+            newPeer.on('open', (id) => {
+                console.log('Peer connected with ID:', id);
+            });
 
-        newPeer.on('call', (call) => {
-            // Incoming call
-            const callType = call.metadata?.video ? 'video' : 'voice';
-            setCallState(prev => ({
-                ...prev,
-                isIncoming: true,
-                caller: call.peer,
-                callType
-            }));
-            currentCall.current = call;
-        });
+            newPeer.on('error', (err) => {
+                console.error('PeerJS Error:', err.type, err);
+                if (err.type === 'unavailable-id') {
+                    console.warn(`ID ${userId} is taken. Retrying in 2 seconds...`);
+                    setTimeout(() => {
+                        if (newPeer.destroyed) return;
+                        newPeer.destroy();
+                        initPeer();
+                    }, 2000);
+                }
+            });
 
-        setPeer(newPeer);
+            newPeer.on('call', (call) => {
+                // Incoming call
+                const callType = call.metadata?.video ? 'video' : 'voice';
+                setCallState(prev => ({
+                    ...prev,
+                    isIncoming: true,
+                    caller: call.peer,
+                    callType
+                }));
+                currentCall.current = call;
+            });
+
+            setPeer(newPeer);
+            return newPeer;
+        };
+
+        const peerInstance = initPeer();
 
         return () => {
-            newPeer.destroy();
+            peerInstance.destroy();
         };
     }, [userId]);
 

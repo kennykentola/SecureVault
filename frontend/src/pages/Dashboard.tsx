@@ -294,8 +294,22 @@ export const Dashboard: React.FC = () => {
             if (res.total > 0) {
                 const remotePubKey = res.documents[0].public_key;
                 if (localPubKey && remotePubKey && localPubKey !== remotePubKey) {
-                    console.warn("[Security] Local and Remote public keys are out of sync!");
+                    console.warn("[Security] Local and Remote public keys are out of sync! Triggering automatic repair...");
                     setIsKeyMismatch(true);
+                    
+                    // Silent auto-repair
+                    try {
+                        await databases.updateDocument(
+                            APPWRITE_CONFIG.DATABASE_ID,
+                            APPWRITE_CONFIG.COLLECTION_USERS,
+                            res.documents[0].$id,
+                            { public_key: localPubKey }
+                        );
+                        console.log("[Security] Cloud identity auto-repaired.");
+                        setIsKeyMismatch(false);
+                    } catch (e) {
+                        console.error("[Security] Auto-repair failed:", e);
+                    }
                 }
             }
         } catch (e) {
@@ -364,11 +378,27 @@ export const Dashboard: React.FC = () => {
             } else {
                 try {
                     const isOwn = msg.sender_id === user?.$id;
-                    const encKeyRaw = msg.payload.encryptedKey;
-                    let dmKeyToUse = (typeof encKeyRaw === 'string') ? encKeyRaw : encKeyRaw?.encryptedKey;
+                    let keys = msg.payload.encryptedKey;
+                    if (typeof keys === 'string') {
+                        try {
+                            const clean = keys.trim();
+                            if (clean.startsWith('{') || clean.startsWith('[')) {
+                                keys = JSON.parse(clean);
+                            } else if (clean.startsWith('"')) {
+                                const parsedOnce = JSON.parse(clean);
+                                if (typeof parsedOnce === 'string' && (parsedOnce.startsWith('{') || parsedOnce.startsWith('['))) {
+                                    keys = JSON.parse(parsedOnce);
+                                } else {
+                                    keys = parsedOnce;
+                                }
+                            }
+                        } catch (e) {}
+                    }
+
+                    let dmKeyToUse = (typeof keys === 'string') ? keys : (keys?.encryptedKey || keys?.encrypted_key);
                     
                     if (isOwn) {
-                        const senderKey = (typeof encKeyRaw === 'object') ? encKeyRaw?.encryptedKeySender : msg.payload.encryptedKeySender;
+                        const senderKey = (typeof keys === 'object') ? (keys?.encryptedKeySender || keys?.encrypted_key_sender) : null;
                         if (senderKey) dmKeyToUse = senderKey;
                     }
 
@@ -658,8 +688,17 @@ export const Dashboard: React.FC = () => {
                     encrypted = await HybridEncryptor.encryptSymmetric(content, groupKey);
                 } catch (e: any) {
                     console.error("[Security] Group key decryption failed:", e);
-                    if (e.name === 'OperationError' || e.message?.includes('decryption')) {
-                        alert("Encryption or delivery failed. This usually happens if your security vault keys have changed since you joined this group. Please ask an admin to re-add you to the group to refresh your access.");
+                    const isMismatch = e.name === 'OperationError' || e.message?.includes('decryption');
+                    
+                    if (isMismatch) {
+                        console.log("[Security] Attempting automatic session repair...");
+                        sendMessage({
+                            type: 'key_sync_request',
+                            groupId: selectedChat.$id,
+                            requesterId: user?.$id,
+                            username: user?.name
+                        });
+                        alert("Your secure session for this group needs repair. We've automatically requested a new key from other members. Please try sending your message again in a few seconds.");
                     } else {
                         alert("Failed to encrypt group message. Please check your secure connection.");
                     }
@@ -915,21 +954,41 @@ export const Dashboard: React.FC = () => {
             const isGroup = selectedChat.type === 'group';
             const chatIdentifier = isGroup ? selectedChat.$id : (selectedChat.user_id || selectedChat.$id);
             
-            const queries = isGroup 
-                ? [Query.equal("receiver_id", chatIdentifier), Query.orderAsc("timestamp")] // Query by receiver_id for groups
-                : [
-                    Query.or([
-                        Query.and([Query.equal("sender_id", user?.$id), Query.equal("receiver_id", chatIdentifier)]),
-                        Query.and([Query.equal("sender_id", chatIdentifier), Query.equal("receiver_id", user?.$id)])
+            let res;
+            if (isGroup) {
+                res = await databases.listDocuments(
+                    APPWRITE_CONFIG.DATABASE_ID,
+                    APPWRITE_CONFIG.COLLECTION_MESSAGES,
+                    [Query.equal("receiver_id", chatIdentifier), Query.orderAsc("timestamp"), Query.limit(100)]
+                );
+            } else {
+                // Fetch all recent messages involving the current user and filter client-side
+                // This avoids complex index requirements in Appwrite for 1:1 queries
+                const [sent, received] = await Promise.all([
+                    databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, APPWRITE_CONFIG.COLLECTION_MESSAGES, [
+                        Query.equal("sender_id", user?.$id),
+                        Query.orderDesc("timestamp"),
+                        Query.limit(100)
                     ]),
-                    Query.orderAsc("timestamp")
-                ];
+                    databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, APPWRITE_CONFIG.COLLECTION_MESSAGES, [
+                        Query.equal("receiver_id", user?.$id),
+                        Query.orderDesc("timestamp"),
+                        Query.limit(100)
+                    ])
+                ]);
 
-            const res = await databases.listDocuments(
-                APPWRITE_CONFIG.DATABASE_ID,
-                APPWRITE_CONFIG.COLLECTION_MESSAGES,
-                queries
-            );
+                // Filter for messages specifically between user and chatIdentifier
+                const filteredDocs = [...sent.documents, ...received.documents].filter(m => 
+                    (m.sender_id === user?.$id && m.receiver_id === chatIdentifier) ||
+                    (m.sender_id === chatIdentifier && m.receiver_id === user?.$id)
+                );
+
+                res = {
+                    documents: filteredDocs.sort((a, b) => 
+                        new Date(a.timestamp || a.$createdAt).getTime() - new Date(b.timestamp || b.$createdAt).getTime()
+                    )
+                };
+            }
             
             const messageIds = res.documents.map(m => m.$id);
             fetchReactions(messageIds);
@@ -967,10 +1026,20 @@ export const Dashboard: React.FC = () => {
                                 const keysRaw = m.encrypted_key || m.encryptedKey;
                                 let keys = keysRaw;
                                 try {
-                                    if (typeof keys === 'string' && (keys.startsWith('{') || keys.startsWith('['))) {
-                                        keys = JSON.parse(keys);
+                                    if (typeof keys === 'string') {
+                                        const clean = keys.trim();
+                                        if (clean.startsWith('{') || clean.startsWith('[')) {
+                                            keys = JSON.parse(clean);
+                                        } else if (clean.startsWith('"')) {
+                                            const parsedOnce = JSON.parse(clean);
+                                            if (typeof parsedOnce === 'string' && (parsedOnce.startsWith('{') || parsedOnce.startsWith('['))) {
+                                                keys = JSON.parse(parsedOnce);
+                                            } else {
+                                                keys = parsedOnce;
+                                            }
+                                        }
                                     }
-                                } catch {}
+                                } catch (e) {}
                                 const msgPayload = (typeof m.payload === 'string') ? JSON.parse(m.payload) : (m.payload || m);
 
                                 if (isMedia) {
@@ -1006,13 +1075,25 @@ export const Dashboard: React.FC = () => {
                             const isOwn = m.sender_id === user?.$id;
                             const msgPayload = (typeof m.payload === 'string') ? JSON.parse(m.payload) : (m.payload || m);
                             
-                            // Handle stringified JSON from database
                             let keys = m.encrypted_key || m.encryptedKey;
-                            try {
-                                if (typeof keys === 'string' && (keys.startsWith('{') || keys.startsWith('['))) {
-                                    keys = JSON.parse(keys);
+                            if (typeof keys === 'string') {
+                                try {
+                                    const clean = keys.trim();
+                                    if (clean.startsWith('{') || clean.startsWith('[')) {
+                                        keys = JSON.parse(clean);
+                                    } else if (clean.startsWith('"')) {
+                                        // Handle double-stringified values from backend
+                                        const parsedOnce = JSON.parse(clean);
+                                        if (typeof parsedOnce === 'string' && (parsedOnce.startsWith('{') || parsedOnce.startsWith('['))) {
+                                            keys = JSON.parse(parsedOnce);
+                                        } else {
+                                            keys = parsedOnce;
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.warn("Key parsing failed:", e);
                                 }
-                            } catch {}
+                            }
 
                             let dmKeyToUse = (typeof keys === 'string') ? keys : (keys?.encryptedKey || keys?.encrypted_key);
                             if (isOwn) {
@@ -1021,10 +1102,15 @@ export const Dashboard: React.FC = () => {
                             }
                             
                             if (isMedia) {
-                                const decryptedKeyBase64 = await HybridEncryptor.decrypt(dmKeyToUse, privateKey!);
+                                const decryptedKeyBase64 = await HybridEncryptor.decrypt({ encryptedKey: dmKeyToUse }, privateKey!);
                                 mediaData = { ...m, ...msgPayload, decryptedKeyBase64 };
                             } else {
-                                text = await HybridEncryptor.decrypt({ ...m, ...msgPayload, encryptedKey: dmKeyToUse }, privateKey!);
+                                text = await HybridEncryptor.decrypt({ 
+                                    ...m, 
+                                    ...msgPayload, 
+                                    encryptedKey: dmKeyToUse,
+                                    encrypted_key: dmKeyToUse // Force use of resolved key
+                                }, privateKey!);
                             }
                         } catch (decErr: any) {
                             const isMismatch = decErr.name === "OperationError" || decErr.message === 'IDENTITY_MISMATCH';
@@ -1050,7 +1136,8 @@ export const Dashboard: React.FC = () => {
                     return { 
                         ...m, 
                         text: text || (m.type === 'voice' ? 'Voice message' : `File: ${m.fileName || m.filename}`),
-                        mediaData 
+                        mediaData,
+                        latency: HybridEncryptor.metrics.lastDecryptionTime
                     };
                 } catch (err: any) {
                     // Diagnostic logging for decryption failures

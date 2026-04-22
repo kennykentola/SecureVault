@@ -33,7 +33,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     const [showActionMenu, setShowActionMenu] = React.useState(false);
     const [showSecurityDetails, setShowSecurityDetails] = React.useState(false);
     const [tamperError, setTamperError] = React.useState<string | null>(null);
-    const [decryptedText] = React.useState<string | null>(msg.text);
     const bubbleRef = React.useRef<HTMLDivElement>(null);
     const audioRef = React.useRef<HTMLAudioElement>(null);
 
@@ -231,7 +230,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                                         </div>
                                     </div>
                                 ) : (
-                                    <p className="text-sm leading-relaxed">{renderText(decryptedText || (msg.text as string))}</p>
+                                    <p className="text-sm leading-relaxed">{renderText(msg.text)}</p>
                                 )}
                                 {isEdited && <span className={`text-[8px] font-bold uppercase tracking-widest block text-right opacity-60`}>Edited</span>}
                             </div>
