@@ -53,9 +53,14 @@ class ConnectionManager:
                 [Query.equal("user_id", user_id)]
             )
             if res.documents:
-                # Safe access to document ID (handles both dict and object)
                 doc = res.documents[0]
-                doc_id = getattr(doc, '$id', None) or doc.get('$id')
+                # Appwrite SDK can return dict or Document object depending on version
+                doc_id = None
+                if isinstance(doc, dict):
+                    doc_id = doc.get('$id')
+                else:
+                    doc_id = getattr(doc, '$id', None) or getattr(doc, 'id', None)
+                
                 if doc_id:
                     databases.update_document(
                         APPWRITE_DATABASE_ID,
@@ -100,10 +105,13 @@ class ConnectionManager:
             
             # 2. Send to all online members except sender
             for member in members_res.documents:
-                member_user_id = member.get('user_id') if isinstance(member, dict) else getattr(member, 'user_id', None)
-                if not member_user_id: # fallback if it's the old dict style or new object style differently
-                    member_user_id = member.get('user_id') if isinstance(member, dict) else member.user_id
-                if member_user_id != sender_id:
+                member_user_id = None
+                if isinstance(member, dict):
+                    member_user_id = member.get('user_id')
+                else:
+                    member_user_id = getattr(member, 'user_id', None)
+                
+                if member_user_id and member_user_id != sender_id:
                     await self.send_personal_message(message, member_user_id)
             return True
         except Exception as e:
@@ -241,7 +249,12 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                         update_data = {"status": msg.get("status"), "updated_at": payload.get("timestamp") if payload else None}
                         if meta_res.documents:
                             doc = meta_res.documents[0]
-                            doc_id = getattr(doc, '$id', None) or doc.get('$id')
+                            doc_id = None
+                            if isinstance(doc, dict):
+                                doc_id = doc.get('$id')
+                            else:
+                                doc_id = getattr(doc, '$id', None) or getattr(doc, 'id', None)
+                                
                             if doc_id:
                                 databases.update_document(APPWRITE_DATABASE_ID, "message_meta", doc_id, update_data)
                         else:

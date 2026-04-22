@@ -149,7 +149,18 @@ export const PinInput: React.FC<PinInputProps> = ({ length = 6, onComplete, onCh
                         {!isSetupMode ? (
                             <>
                                 <p className="text-[10px] text-gray-400 font-medium">
-                                    Keys not found? <button onClick={() => setIsSetupMode(true)} className="text-blue-500 font-bold hover:underline">Setup as New Device</button>
+                                    Keys not found? <button 
+                                        onClick={async () => {
+                                            if (window.confirm("WARNING: Setting up as a new device will replace your current security keys. You will lose access to your previous encrypted messages. Continue?")) {
+                                                await KeyManager.resetAllKeys();
+                                                setIsSetupMode(true);
+                                                setValues(new Array(length).fill(""));
+                                            }
+                                        }} 
+                                        className="text-blue-500 font-bold hover:underline"
+                                    >
+                                        Setup as New Device
+                                    </button>
                                 </p>
                                 <button 
                                     onClick={async () => {

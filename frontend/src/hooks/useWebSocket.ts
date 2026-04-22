@@ -19,11 +19,18 @@ export const useWebSocket = (userId: string | undefined, onMessage: (msg: any) =
             let wsUrl: string;
 
             if (envUrl) {
-                wsUrl = `${envUrl}/ws/${userId}`;
+                // Ensure we use the correct protocol (ws or wss) based on the current page or provided URL
+                const isHttps = window.location.protocol === 'https:';
+                let baseUrl = envUrl.replace(/^http/, 'ws'); // Replaces http with ws, https with wss
+                if (isHttps && baseUrl.startsWith('ws:')) {
+                    baseUrl = baseUrl.replace('ws:', 'wss:');
+                }
+                wsUrl = `${baseUrl}/ws/${userId}`;
             } else {
                 const host = window.location.hostname;
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const targetHost = (host === 'localhost' && reconnectAttempts.current > 2) ? '127.0.0.1' : host;
-                wsUrl = `ws://${targetHost}:8000/ws/${userId}`;
+                wsUrl = `${protocol}//${targetHost}:8000/ws/${userId}`;
             }
             
             console.log(`Connecting to WebSocket: ${wsUrl}`);
@@ -48,15 +55,15 @@ export const useWebSocket = (userId: string | undefined, onMessage: (msg: any) =
                 setStatus('disconnected');
                 if (event.code !== 1000 && event.code !== 1001) { // Not a normal closure
                     const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), maxReconnectDelay);
-                    console.warn(`WebSocket Disconnected (Code: ${event.code}), retrying in ${delay}ms...`);
+                    console.warn(`WebSocket Disconnected (Code: ${event.code}), retrying in ${delay}ms... (Attempt ${reconnectAttempts.current + 1})`);
                     
                     // Clear the current ref if it's the same socket to avoid interference
                     if (ws.current === socket) ws.current = null;
                     
-                    setTimeout(() => {
-                        if (reconnectAttempts.current > 0) connect();
-                    }, delay);
                     reconnectAttempts.current++;
+                    setTimeout(() => {
+                        connect();
+                    }, delay);
                 }
             };
 

@@ -30,7 +30,7 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ messages }
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setIsOpen(!isOpen)}
                 className={`w-14 h-14 rounded-full flex items-center justify-center shadow-2xl transition-colors ${
-                    isOpen ? 'bg-primary-600 text-white' : 'bg-slate-900 text-primary-400 border border-primary-500/30'
+                    isOpen ? 'bg-primary-600 text-white' : 'bg-white text-primary-600 border border-primary-500/30'
                 }`}
             >
                 {isOpen ? <Shield className="w-6 h-6" /> : <Activity className="w-6 h-6 animate-pulse" />}
