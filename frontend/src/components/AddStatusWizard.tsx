@@ -106,7 +106,7 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
                             const encryptedStatusKey = await HybridEncryptor.encryptKeyWithRSA(statusKeyExported, publicKey);
                             
                             await databases.createDocument(APPWRITE_CONFIG.DATABASE_ID, "status_keys", ID.unique(), {
-                                owner_id: user?.$id,
+                                poster_id: user?.$id,
                                 recipient_id: viewer.user_id,
                                 encrypted_key: encryptedStatusKey,
                                 created_at: new Date().toISOString()
@@ -121,7 +121,7 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
                 if (selfProfile?.public_key) {
                     const selfPublicKey = await KeyManager.importPublicKey(selfProfile.public_key);
                     await databases.createDocument(APPWRITE_CONFIG.DATABASE_ID, "status_keys", ID.unique(), {
-                        owner_id: user?.$id,
+                        poster_id: user?.$id,
                         recipient_id: user?.$id,
                         encrypted_key: await HybridEncryptor.encryptKeyWithRSA(statusKeyExported, selfPublicKey),
                         created_at: new Date().toISOString()

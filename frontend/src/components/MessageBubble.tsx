@@ -47,12 +47,32 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const playAudio = React.useCallback(async () => {
+        const audioEl = audioRef.current;
+        if (!audioEl) return false;
+
+        try {
+            await audioEl.play();
+            setIsPlaying(true);
+            return true;
+        } catch (error: any) {
+            if (error?.name !== 'AbortError') {
+                console.warn("Audio playback failed", error);
+            }
+            setIsPlaying(false);
+            return false;
+        }
+    }, []);
+
     const handleMediaAction = async () => {
         if (decryptedUrl) {
             if (msg.type === 'voice') {
-                if (isPlaying) audioRef.current?.pause();
-                else audioRef.current?.play();
-                setIsPlaying(!isPlaying);
+                if (isPlaying) {
+                    audioRef.current?.pause();
+                    setIsPlaying(false);
+                } else {
+                    await playAudio();
+                }
             } else {
                 const link = document.createElement('a');
                 link.href = decryptedUrl;
@@ -86,7 +106,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             setDecryptedUrl(url);
 
             if (msg.type === 'voice') {
-                setTimeout(() => { audioRef.current?.play(); setIsPlaying(true); }, 100);
+                setTimeout(() => {
+                    void playAudio();
+                }, 100);
             }
         } catch (e) {
             console.error("Decryption failed", e);

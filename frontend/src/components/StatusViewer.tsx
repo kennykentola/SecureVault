@@ -75,7 +75,7 @@ export const StatusViewer: React.FC<StatusViewerProps> = ({
             // if it's "MY" status, we use our own key.
             
             let statusKey: CryptoKey | null = null;
-            const isOwner = status.user_id === user.$id || status.owner_id === user.$id;
+            const isOwner = status.user_id === user.$id || status.poster_id === user.$id;
             
             // 1. If we are the owner, prioritize using our local status key directly
             if (isOwner) {
@@ -96,7 +96,7 @@ export const StatusViewer: React.FC<StatusViewerProps> = ({
                         APPWRITE_CONFIG.DATABASE_ID, 
                         "status_keys", 
                         [
-                            Query.equal('owner_id', status.user_id),
+                            Query.equal('poster_id', status.user_id),
                             Query.equal('recipient_id', user.$id),
                             Query.orderDesc('created_at'),
                             Query.limit(1)
