@@ -1,7 +1,6 @@
 import os
 import sys
 import argparse
-import time
 from datetime import datetime
 from dotenv import load_dotenv
 from appwrite.client import Client
