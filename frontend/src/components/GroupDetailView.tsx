@@ -29,6 +29,10 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({ isOpen, onClos
     const [isAdminOnly, setIsAdminOnly] = useState(group.is_admin_only || false);
     const [membersCanAdd, setMembersCanAdd] = useState(group.members_can_add !== false);
     const [myRole, setMyRole] = useState<'admin' | 'member'>('member');
+    const [privacyControlsUnavailable, setPrivacyControlsUnavailable] = useState(false);
+
+    const isUnknownAttributeError = (error: any) =>
+        typeof error?.message === 'string' && error.message.includes("Unknown attribute");
 
     useEffect(() => {
         if (isOpen && group) {
@@ -36,6 +40,9 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({ isOpen, onClos
             fetchMedia();
             setEditName(group.name);
             setEditDesc(group.description);
+            setIsAdminOnly(group.is_admin_only || false);
+            setMembersCanAdd(group.members_can_add !== false);
+            setPrivacyControlsUnavailable(false);
         }
     }, [isOpen, group]);
 
@@ -72,12 +79,23 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({ isOpen, onClos
         if (myRole !== 'admin') return;
         setIsLoading(true);
         try {
-            await databases.updateDocument(APPWRITE_CONFIG.DATABASE_ID, "groups", group.$id, {
-                name: editName,
-                description: editDesc,
-                is_admin_only: isAdminOnly,
-                members_can_add: membersCanAdd
-            });
+            try {
+                await databases.updateDocument(APPWRITE_CONFIG.DATABASE_ID, "groups", group.$id, {
+                    name: editName,
+                    description: editDesc,
+                    is_admin_only: isAdminOnly,
+                    members_can_add: membersCanAdd
+                });
+            } catch (e: any) {
+                if (!isUnknownAttributeError(e)) throw e;
+
+                setPrivacyControlsUnavailable(true);
+                await databases.updateDocument(APPWRITE_CONFIG.DATABASE_ID, "groups", group.$id, {
+                    name: editName,
+                    description: editDesc
+                });
+                alert("Group privacy controls are not enabled on this server yet. Name and description were saved, but admin-only posting settings were skipped.");
+            }
             setIsEditing(false);
             onUpdate();
         } catch (e) { console.error(e); }
@@ -94,7 +112,16 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({ isOpen, onClos
                 [key]: value
             });
             onUpdate();
-        } catch (e) { console.error(e); }
+        } catch (e: any) {
+            console.error(e);
+            if (key === 'is_admin_only') setIsAdminOnly(group.is_admin_only || false);
+            else setMembersCanAdd(group.members_can_add !== false);
+
+            if (isUnknownAttributeError(e)) {
+                setPrivacyControlsUnavailable(true);
+                alert("Group privacy controls are not enabled on this server yet. Run the backend schema setup to enable admin-only posting settings.");
+            }
+        }
     };
 
     const handleLeaveGroup = async () => {
@@ -351,6 +378,14 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({ isOpen, onClos
                                     <div className="space-y-8">
                                         <section className="space-y-4">
                                             <h5 className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Privacy & Governance</h5>
+                                            {privacyControlsUnavailable && (
+                                                <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl">
+                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Server Schema Update Needed</p>
+                                                    <p className="text-xs text-amber-700 mt-2 leading-relaxed">
+                                                        This backend has not enabled the group privacy attributes yet. Run the backend schema setup, then redeploy to use admin-only posting and member-add permissions.
+                                                    </p>
+                                                </div>
+                                            )}
                                             <div className="space-y-3">
                                                 <div className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border border-slate-100">
                                                     <div>
@@ -358,8 +393,8 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({ isOpen, onClos
                                                         <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Restrict member transmissions</p>
                                                     </div>
                                                     <div 
-                                                        onClick={() => handleTogglePrivacy('is_admin_only', !isAdminOnly)}
-                                                        className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors ${isAdminOnly ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                                                        onClick={() => !privacyControlsUnavailable && handleTogglePrivacy('is_admin_only', !isAdminOnly)}
+                                                        className={`w-12 h-6 rounded-full relative transition-colors ${privacyControlsUnavailable ? 'bg-slate-200 cursor-not-allowed opacity-50' : isAdminOnly ? 'bg-indigo-600 cursor-pointer' : 'bg-slate-200 cursor-pointer'}`}
                                                     >
                                                         <motion.div 
                                                             animate={{ x: isAdminOnly ? 24 : 0 }}
@@ -373,8 +408,8 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({ isOpen, onClos
                                                         <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Allow members to add contacts</p>
                                                     </div>
                                                     <div 
-                                                        onClick={() => handleTogglePrivacy('members_can_add', !membersCanAdd)}
-                                                        className={`w-12 h-6 rounded-full relative cursor-pointer transition-colors ${membersCanAdd ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                                                        onClick={() => !privacyControlsUnavailable && handleTogglePrivacy('members_can_add', !membersCanAdd)}
+                                                        className={`w-12 h-6 rounded-full relative transition-colors ${privacyControlsUnavailable ? 'bg-slate-200 cursor-not-allowed opacity-50' : membersCanAdd ? 'bg-indigo-600 cursor-pointer' : 'bg-slate-200 cursor-pointer'}`}
                                                     >
                                                         <motion.div 
                                                             animate={{ x: membersCanAdd ? 24 : 0 }}

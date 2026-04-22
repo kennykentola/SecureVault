@@ -254,7 +254,7 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Security Code</p>
                                             <p className="text-sm font-mono font-bold tracking-[0.2em] text-slate-800 `wrap-break-words`">{securityCode}</p>
                                         </div>
-                                    )}
+                                    )}Your secure session for this group needs repair. We've automatically requested a new key from other members. Please try sending your message again in a few seconds.
                                     {securityMessage && (
                                         <p className={`text-[10px] font-medium leading-relaxed ${securityCode ? 'text-slate-400' : 'text-amber-600'}`}>
                                             {securityMessage}

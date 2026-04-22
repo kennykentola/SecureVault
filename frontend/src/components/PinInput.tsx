@@ -6,33 +6,31 @@ import { KeyManager } from '../crypto/keyManager';
 interface PinInputProps {
     length?: number;
     onComplete: (pin: string) => void;
+    onSetup?: (pin: string) => void | Promise<void>;
     onChange?: (pin: string) => void;
     isOpen?: boolean;
     onSuccess?: () => void;
     variant?: 'modal' | 'embedded';
 }
 
-export const PinInput: React.FC<PinInputProps> = ({ length = 6, onComplete, onChange, isOpen, onSuccess, variant = 'modal' }) => {
+export const PinInput: React.FC<PinInputProps> = ({ length = 6, onComplete, onSetup, onChange, isOpen, onSuccess, variant = 'modal' }) => {
     const [values, setValues] = useState<string[]>(new Array(length).fill(""));
     const [isShaking, setIsShaking] = useState(false);
     const [isSetupMode, setIsSetupMode] = useState(false);
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
     useEffect(() => {
-        // Check if keys exist to determine default mode
-        const check = async () => {
-            const hasKeys = await KeyManager.getPublicKey();
-            if (!hasKeys) setIsSetupMode(true);
-        };
-        check();
+        setValues(new Array(length).fill(""));
+        setIsShaking(false);
+        if (variant === 'modal') {
+            setIsSetupMode(false);
+        }
     }, [isOpen]);
 
     const handleAction = async (pin: string) => {
         try {
-            if (isSetupMode) {
-                // If the user context has setupNewVault, use it. 
-                // But PinInput is generic, so we'll just call onComplete and let the parent decide.
-                await onComplete(pin);
+            if (isSetupMode && onSetup) {
+                await onSetup(pin);
             } else {
                 await onComplete(pin);
             }
@@ -113,12 +111,12 @@ export const PinInput: React.FC<PinInputProps> = ({ length = 6, onComplete, onCh
                                 <Lock className="w-8 h-8" />
                             </div>
                             <h2 className="text-2xl font-black text-gray-900 italic uppercase tracking-tight">
-                                {isSetupMode ? "Setup Security Vault" : "Identity Handshake"}
+                                {isSetupMode ? "Setup Security Vault" : "Unlock Security Vault"}
                             </h2>
                             <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] max-w-[200px] mx-auto leading-relaxed">
                                 {isSetupMode 
                                     ? "Set a new 6-digit PIN to secure your local encryption vault on this device."
-                                    : "Input your session PIN to unlock your end-to-end encryption vault"}
+                                    : "Input your session PIN to unlock or restore your end-to-end encryption vault"}
                             </p>
                         </div>
                     </div>

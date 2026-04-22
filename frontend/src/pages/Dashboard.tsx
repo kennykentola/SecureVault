@@ -173,8 +173,11 @@ export const Dashboard: React.FC = () => {
 
     useEffect(() => {
         fetchInitialData();
-        checkKeyStatus();
     }, [user]);
+
+    useEffect(() => {
+        checkKeyStatus();
+    }, [user, privateKey]);
 
 
 
@@ -349,6 +352,13 @@ export const Dashboard: React.FC = () => {
     }, [filteredUsers, lastMessages]);
 
     const checkKeyStatus = async () => {
+        if (!user) return;
+
+        if (privateKey) {
+            setShowUnlockModal(false);
+            return;
+        }
+
         const hasKeys = await checkKeys();
         if (!hasKeys) {
             setShowUnlockModal(true);
@@ -1293,20 +1303,7 @@ export const Dashboard: React.FC = () => {
 
     const handleUnlock = async (pin: string) => {
         try {
-            try {
-                await unlockKeys(pin);
-            } catch (unlockError: any) {
-                const canSetupNewVault = unlockError?.message?.includes("No security keys found on this device.");
-                if (!canSetupNewVault) {
-                    throw unlockError;
-                }
-
-                if (setupNewVault) {
-                    await setupNewVault(pin);
-                } else {
-                    throw new Error("Setup capability unavailable.");
-                }
-            }
+            await unlockKeys(pin);
             
             setShowUnlockModal(false);
 
@@ -2006,7 +2003,7 @@ const isLink = searchText.includes("http");
                 onEnd={endCall} 
             />
 
-            <PinInput isOpen={showUnlockModal} onComplete={handleUnlock} />
+            <PinInput isOpen={showUnlockModal} onComplete={handleUnlock} onSetup={setupNewVault} />
             
             {/* New Group Modals */}
             {selectedChat?.type === 'group' && (

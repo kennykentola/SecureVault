@@ -109,7 +109,13 @@ class AppManager:
         self.ensure_index(coll_users, "idx_ft_email", "fulltext", ["email"])
         self.ensure_index(coll_users, "idx_ft_phone", "fulltext", ["phone"])
 
-        # 3. FIX STATUS_KEYS COLLECTION
+        # 3. FIX GROUPS COLLECTION
+        coll_groups = "groups"
+        print(f"\nAligning '{coll_groups}' collection...")
+        self.ensure_attribute(coll_groups, "is_admin_only", "boolean", required=False, default=False)
+        self.ensure_attribute(coll_groups, "members_can_add", "boolean", required=False, default=True)
+
+        # 4. FIX STATUS_KEYS COLLECTION
         coll_status_keys = "status_keys"
         print(f"\nAligning '{coll_status_keys}' collection...")
         self.ensure_attribute(coll_status_keys, "poster_id", "string", 100)
