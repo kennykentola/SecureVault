@@ -146,14 +146,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
 
             const backupRecord = await KeyManager.createVaultBackupRecord(activePrivateKey, publicKey, pin);
-            await profile.databases.updateDocument(
-                profile.APPWRITE_CONFIG.DATABASE_ID,
-                profile.APPWRITE_CONFIG.COLLECTION_USERS,
-                profile.doc.$id,
-                { vault_backup: JSON.stringify(backupRecord) }
-            );
+            try {
+                await profile.databases.updateDocument(
+                    profile.APPWRITE_CONFIG.DATABASE_ID,
+                    profile.APPWRITE_CONFIG.COLLECTION_USERS,
+                    profile.doc.$id,
+                    { vault_backup: JSON.stringify(backupRecord) }
+                );
+            } catch (updateError: any) {
+                // Appwrite schema doesn't have vault_backup attribute — skip silently.
+                // The app still works; cloud key recovery just won't be available on new devices.
+                if (updateError?.message?.includes('vault_backup') || updateError?.message?.includes('Unknown attribute')) {
+                    console.warn('[Security] vault_backup attribute not in schema, skipping cloud backup sync.');
+                    return;
+                }
+                throw updateError;
+            }
         } catch (e) {
-            console.warn("[Security] Failed to sync encrypted vault backup:", e);
+            console.warn('[Security] Failed to sync encrypted vault backup:', e);
         }
     };
 

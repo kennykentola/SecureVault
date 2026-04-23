@@ -33,6 +33,12 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
 
     const bgOptions = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#000000"];
 
+    // Fetch contacts eagerly when wizard opens so key-sharing works even if the user
+    // skips the privacy step. Also refresh when they reach it.
+    useEffect(() => {
+        if (isOpen) fetchContacts();
+    }, [isOpen]);
+
     useEffect(() => {
         if (step === 'privacy') fetchContacts();
     }, [step]);

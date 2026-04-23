@@ -93,7 +93,7 @@ export const Dashboard: React.FC = () => {
     const [replyTo, setReplyTo] = useState<any>(null);
     const [editingMessage, setEditingMessage] = useState<any>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const { isRecording, audioBlob, audioMimeType, recordingDuration, startRecording, stopRecording, setAudioBlob } = useAudioRecorder();
+    const { isRecording, audioBlob, audioMimeType, recordingDuration, toggleRecording, cancelRecording, setAudioBlob } = useAudioRecorder();
     const [isVoiceUploading, setIsVoiceUploading] = useState(false);
 
     const getDirectChatUserId = (chat: any) => chat?.user_id || null;
@@ -180,14 +180,15 @@ export const Dashboard: React.FC = () => {
         if (mimeExtension === 'quicktime') return 'mov';
         return mimeExtension.replace(/[^a-z0-9]+/g, '');
     };
-    const getEncryptedUploadName = (originalName: string, type: 'voice' | 'file', mimeType?: string) => {
+    const getEncryptedUploadName = (originalName: string, type: 'voice' | 'file', _mimeType?: string) => {
+        // Encrypted blobs are raw AES-GCM binary — always use .enc so Appwrite never rejects the extension.
+        // The real MIME type is preserved in the message payload (originalMimeType field).
         const safeBaseName = originalName
             .replace(/\.[^/.]+$/, '')
             .replace(/[^a-zA-Z0-9-_]+/g, '-')
             .replace(/^-+|-+$/g, '')
             .slice(0, 40) || (type === 'voice' ? 'voice-note' : 'attachment');
-        const safeExtension = getFileExtension(originalName, mimeType) || (type === 'voice' ? 'webm' : 'bin');
-        return `${safeBaseName}-encrypted.${safeExtension}`;
+        return `${safeBaseName}-encrypted.enc`;
     };
     const getVoiceNoteFileName = (mimeType?: string) => {
         const extension = getFileExtension('voice-note', mimeType) || 'webm';
@@ -1282,13 +1283,17 @@ export const Dashboard: React.FC = () => {
             const { blob, iv } = await HybridEncryptor.encryptFile(file, fileKey);
 
             // 3. Upload encrypted blob to Storage
+            // IMPORTANT: The blob is AES-GCM encrypted binary — its MIME type is ALWAYS
+            // application/octet-stream regardless of the original file type. The .enc
+            // extension ensures Appwrite never rejects it for an unsupported extension.
             const uploadedFile = await storage.createFile(
                 APPWRITE_CONFIG.BUCKET_ID,
                 ID.unique(),
                 new File([blob], getEncryptedUploadName(file.name, type, file.type), {
-                    type: file.type || 'application/octet-stream'
+                    type: 'application/octet-stream'
                 })
             );
+
 
             // 4. Wrap the file key with recipient's public key (or group key)
             let encryptedKeyPayload;
@@ -2129,25 +2134,50 @@ const isLink = searchText.includes("http");
                                         />
                                     
                                     <div className="flex items-center gap-1 md:gap-2 pb-1 md:pb-1.5 shrink-0">
-                                        <button 
+
+                                        {/* While recording: show a live duration + cancel */}
+                                        {isRecording && (
+                                            <>
+                                                <span className="text-red-500 text-xs font-bold animate-pulse px-2">
+                                                    {String(Math.floor(recordingDuration / 60)).padStart(2,'0')}:{String(recordingDuration % 60).padStart(2,'0')}
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={cancelRecording}
+                                                    title="Cancel recording"
+                                                    className="p-2 md:p-3 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 transition-colors text-xs font-bold"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </>
+                                        )}
+
+                                        {/* Mic toggle button */}
+                                        <button
                                             type="button"
-                                            onPointerDown={startRecording}
-                                            onPointerUp={stopRecording}
-                                            onPointerLeave={stopRecording}
-                                            onPointerCancel={stopRecording}
+                                            onClick={toggleRecording}
                                             disabled={isVoiceUploading}
-                                            className={`p-3 md:p-4 rounded-full transition-all ${isRecording ? 'bg-red-500 scale-110 animate-pulse text-white' : 'hover:bg-white/10 text-slate-500 hover:text-white'} ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            title={isRecording ? 'Stop & send voice note' : 'Start voice note'}
+                                            className={`p-3 md:p-4 rounded-full transition-all ${
+                                                isRecording
+                                                    ? 'bg-red-500 scale-110 animate-pulse text-white shadow-lg shadow-red-500/40'
+                                                    : 'hover:bg-white/10 text-slate-500 hover:text-white'
+                                            } ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                                         >
                                             <Mic className="w-5 h-5 md:w-6 md:h-6" />
                                         </button>
-                                        <button 
-                                            type="button"
-                                            onClick={() => handleSendMessage()}
-                                            disabled={isVoiceUploading || (!newMessage.trim() && !newMessage)}
-                                            className={`p-3 md:p-4 bg-linear-to-br from-primary-600 to-indigo-700 hover:from-primary-500 hover:to-indigo-600 text-white rounded-full transition-all shadow-xl shadow-primary-500/30 active:scale-95 ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        >
-                                            {isVoiceUploading ? <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" /> : <Send className="w-5 h-5 md:w-6 md:h-6" />}
-                                        </button>
+
+                                        {/* Send text button — hidden while recording */}
+                                        {!isRecording && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleSendMessage()}
+                                                disabled={isVoiceUploading || (!newMessage.trim() && !newMessage)}
+                                                className={`p-3 md:p-4 bg-linear-to-br from-primary-600 to-indigo-700 hover:from-primary-500 hover:to-indigo-600 text-white rounded-full transition-all shadow-xl shadow-primary-500/30 active:scale-95 ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            >
+                                                {isVoiceUploading ? <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" /> : <Send className="w-5 h-5 md:w-6 md:h-6" />}
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </div>

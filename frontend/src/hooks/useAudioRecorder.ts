@@ -10,6 +10,7 @@ export const useAudioRecorder = () => {
     const streamRef = useRef<MediaStream | null>(null);
     const chunks = useRef<Blob[]>([]);
     const discardRecordingRef = useRef(false);
+    const MIN_BLOB_BYTES = 500; // ignore blobs smaller than 500 bytes (silence)
 
     const clearTimer = () => {
         if (timerRef.current) {
@@ -63,12 +64,12 @@ export const useAudioRecorder = () => {
                 if (discardRecordingRef.current) {
                     discardRecordingRef.current = false;
                     setAudioBlob(null);
-                } else if (blob.size > 0) {
+                } else if (blob.size >= MIN_BLOB_BYTES) {
                     setAudioMimeType(resolvedMimeType);
                     setAudioBlob(blob);
                 } else {
                     setAudioBlob(null);
-                    alert("Voice note was empty. Record a little longer and try again.");
+                    alert('Voice note was too short. Record for at least 1 second and try again.');
                 }
 
                 chunks.current = [];
@@ -111,5 +112,14 @@ export const useAudioRecorder = () => {
         }
     }, [isRecording]);
 
-    return { isRecording, audioBlob, audioMimeType, recordingDuration, startRecording, stopRecording, cancelRecording, setAudioBlob };
+    // Click-to-toggle: one click starts, next click stops
+    const toggleRecording = useCallback(() => {
+        if (isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    }, [isRecording, startRecording, stopRecording]);
+
+    return { isRecording, audioBlob, audioMimeType, recordingDuration, startRecording, stopRecording, cancelRecording, toggleRecording, setAudioBlob };
 };
