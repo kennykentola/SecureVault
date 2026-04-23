@@ -92,6 +92,7 @@ class AppManager:
         self.ensure_attribute(coll_messages, "group_id", "string", 36)
         self.ensure_attribute(coll_messages, "sender_name", "string", 100)
         self.ensure_attribute(coll_messages, "encrypted_key", "string", 1000)
+        self.ensure_attribute(coll_messages, "payload", "string", 20000)
         
         # 2. FIX USERS_DATA COLLECTION & SEARCH INDEXES
         coll_users = "users_data"

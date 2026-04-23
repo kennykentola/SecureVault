@@ -13,7 +13,11 @@ interface ProfileSidePanelProps {
     messages: any[];
     getAvatarUrl: (id: string | null | undefined, bucketId?: string) => string | undefined;
     sharedGroups?: any[];
+    sharedGroupsLoading?: boolean;
     onStartCall?: (type: 'voice' | 'video') => void;
+    isMuted?: boolean;
+    onToggleMute?: () => void;
+    onReport?: () => void;
 }
 
 export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
@@ -23,7 +27,11 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
     messages,
     getAvatarUrl,
     sharedGroups = [],
-    onStartCall
+    sharedGroupsLoading = false,
+    onStartCall,
+    isMuted = false,
+    onToggleMute,
+    onReport
 }) => {
     const { user } = useAuth();
     const [isGeneratingCode, setIsGeneratingCode] = React.useState(false);
@@ -315,7 +323,7 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                     {securityCode && (
                                         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Security Code</p>
-                                            <p className="text-sm font-mono font-bold tracking-[0.2em] text-slate-800 `wrap-break-word`">{securityCode}</p>
+                                            <p className="text-sm font-mono font-bold tracking-[0.2em] text-slate-800 wrap-break-word">{securityCode}</p>
                                         </div>
                                     )}
                                     {isGroup && !securityMessage && (
@@ -340,8 +348,13 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                             <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-700">Groups in Common</h4>
                                         </div>
                                         <div className="space-y-4">
-                                            {sharedGroups.length > 0 ? sharedGroups.map((g, i) => (
-                                                <div key={i} className="flex items-center gap-3">
+                                            {sharedGroupsLoading ? (
+                                                <div className="flex items-center justify-center gap-2 py-6 text-slate-400">
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                    <span className="text-[11px] font-medium">Loading shared groups...</span>
+                                                </div>
+                                            ) : sharedGroups.length > 0 ? sharedGroups.map((g) => (
+                                                <div key={g.$id || g.group_id || g.name} className="flex items-center gap-3">
                                                     <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center text-xs font-bold">
                                                         {g.avatar ? (
                                                             <img src={g.avatar} className="w-full h-full object-cover" />
@@ -365,11 +378,19 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
 
                                 {/* Danger Actions */}
                                 <div className="space-y-2 pt-4">
-                                    <button className="w-full h-14 bg-white border border-slate-200 rounded-2xl flex items-center gap-4 px-6 text-red-500 font-bold hover:bg-red-50 transition-colors">
+                                    <button
+                                        type="button"
+                                        onClick={onToggleMute}
+                                        className="w-full h-14 bg-white border border-slate-200 rounded-2xl flex items-center gap-4 px-6 text-slate-700 font-bold hover:bg-slate-50 transition-colors"
+                                    >
                                         <BellOff className="w-5 h-5" />
-                                        <span className="text-sm">Mute Notifications</span>
+                                        <span className="text-sm">{isMuted ? 'Unmute Notifications' : 'Mute Notifications'}</span>
                                     </button>
-                                    <button className="w-full h-14 bg-white border border-slate-200 rounded-2xl flex items-center gap-4 px-6 text-red-500 font-bold hover:bg-red-50 transition-colors">
+                                    <button
+                                        type="button"
+                                        onClick={onReport}
+                                        className="w-full h-14 bg-white border border-slate-200 rounded-2xl flex items-center gap-4 px-6 text-red-500 font-bold hover:bg-red-50 transition-colors"
+                                    >
                                         <Flag className="w-5 h-5" />
                                         <span className="text-sm">Report {isGroup ? 'Group' : 'Contact'}</span>
                                     </button>

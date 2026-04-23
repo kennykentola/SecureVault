@@ -25,7 +25,7 @@ export const GiphyPicker: React.FC<GiphyPickerProps> = ({ onSelect, onClose }) =
         <motion.div 
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            className="absolute bottom-20 left-0 w-80 h-96 bg-slate-900/95 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-3xl z-50 overflow-hidden flex flex-col"
+            className="w-[min(100vw-2rem,20rem)] md:w-80 h-96 bg-slate-900/95 backdrop-blur-3xl border border-white/10 rounded-3xl shadow-3xl overflow-hidden flex flex-col"
         >
             <div className="p-4 border-b border-white/5 space-y-3">
                 <div className="flex items-center justify-between mb-1">

@@ -35,17 +35,51 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     const [tamperError, setTamperError] = React.useState<string | null>(null);
     const bubbleRef = React.useRef<HTMLDivElement>(null);
     const audioRef = React.useRef<HTMLAudioElement>(null);
+    const longPressTimerRef = React.useRef<number | null>(null);
+    const mediaType = msg.type || msg.mediaData?.type;
+    const fileId = msg.fileId || msg.file_id || msg.mediaData?.fileId || msg.mediaData?.file_id;
+    const fileName = msg.fileName || msg.filename || msg.mediaData?.fileName || msg.mediaData?.file_name;
+    const iv = msg.iv || msg.mediaData?.iv || msg.mediaData?.iv_b64;
+    const durationLabel = msg.duration || msg.mediaData?.duration;
+    const rawKeyBase64 = msg.decryptedKeyBase64 || msg.mediaData?.decryptedKeyBase64;
+    const localFile = msg.localFile instanceof File ? msg.localFile : null;
 
     // Close menu when clicking away
     React.useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
+        const handleClickOutside = (event: PointerEvent) => {
             if (bubbleRef.current && !bubbleRef.current.contains(event.target as Node)) {
                 setShowActionMenu(false);
             }
         };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        document.addEventListener('pointerdown', handleClickOutside);
+        return () => document.removeEventListener('pointerdown', handleClickOutside);
     }, []);
+
+    React.useEffect(() => {
+        return () => {
+            if (longPressTimerRef.current) {
+                window.clearTimeout(longPressTimerRef.current);
+            }
+            if (decryptedUrl?.startsWith('blob:')) {
+                URL.revokeObjectURL(decryptedUrl);
+            }
+        };
+    }, [decryptedUrl]);
+
+    const clearLongPress = React.useCallback(() => {
+        if (longPressTimerRef.current) {
+            window.clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+        }
+    }, []);
+
+    const startLongPress = React.useCallback(() => {
+        if (!window.matchMedia('(pointer: coarse)').matches || isDeleted) return;
+        clearLongPress();
+        longPressTimerRef.current = window.setTimeout(() => {
+            setShowActionMenu(true);
+        }, 450);
+    }, [clearLongPress, isDeleted]);
 
     const playAudio = React.useCallback(async () => {
         const audioEl = audioRef.current;
@@ -66,7 +100,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
     const handleMediaAction = async () => {
         if (decryptedUrl) {
-            if (msg.type === 'voice') {
+            if (mediaType === 'voice') {
                 if (isPlaying) {
                     audioRef.current?.pause();
                     setIsPlaying(false);
@@ -76,23 +110,41 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             } else {
                 const link = document.createElement('a');
                 link.href = decryptedUrl;
-                link.download = msg.fileName || 'file';
+                link.download = fileName || 'file';
                 link.click();
             }
             return;
         }
 
-        if (!msg.fileId || isDecrypting) return;
+        if (localFile) {
+            const localUrl = URL.createObjectURL(localFile);
+            setDecryptedUrl(localUrl);
+            if (mediaType === 'voice') {
+                setTimeout(() => {
+                    void playAudio();
+                }, 100);
+            } else {
+                const link = document.createElement('a');
+                link.href = localUrl;
+                link.download = fileName || localFile.name || 'file';
+                link.click();
+            }
+            return;
+        }
+
+        if (!fileId || !iv || isDecrypting) return;
 
         setIsDecrypting(true);
         try {
             // 1. Download encrypted file
-            const downloadUrl = storage.getFileDownload(APPWRITE_CONFIG.BUCKET_ID, msg.fileId);
+            const downloadUrl = storage.getFileDownload(APPWRITE_CONFIG.BUCKET_ID, fileId);
             const response = await fetch(downloadUrl.toString(), { credentials: 'include' });
+            if (!response.ok) {
+                throw new Error(`File download failed with status ${response.status}`);
+            }
             const fileBlob = await response.blob();
             
             // 2. Import the wrapped key and decrypt it to get the file AES key
-            const rawKeyBase64 = msg.decryptedKeyBase64 || msg.mediaData?.decryptedKeyBase64;
             if (!rawKeyBase64) throw new Error("No decryption key available");
 
             const rawKey = new Uint8Array(atob(rawKeyBase64).split('').map(c => c.charCodeAt(0)));
@@ -101,11 +153,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             );
 
             // 3. Decrypt the blob
-            const decryptedBlob = await HybridEncryptor.decryptFile(fileBlob, aesKey, msg.iv);
+            const decryptedBlob = await HybridEncryptor.decryptFile(fileBlob, aesKey, iv);
             const url = URL.createObjectURL(decryptedBlob);
             setDecryptedUrl(url);
 
-            if (msg.type === 'voice') {
+            if (mediaType === 'voice') {
                 setTimeout(() => {
                     void playAudio();
                 }, 100);
@@ -124,7 +176,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             animate={{ opacity: 1, y: 0 }}
             className={`flex gap-3 ${isOwn ? 'justify-end' : 'justify-start'}`}
         >
-            <div className={`max-w-[75%] group relative ${isOwn ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+            <div
+                ref={bubbleRef}
+                onTouchStart={startLongPress}
+                onTouchEnd={clearLongPress}
+                onTouchCancel={clearLongPress}
+                onContextMenu={(e) => {
+                    e.preventDefault();
+                    setShowActionMenu(true);
+                }}
+                className={`max-w-[75%] group relative ${isOwn ? 'items-end' : 'items-start'} flex flex-col gap-1`}
+            >
                 <div className={`px-4 py-3 rounded-2xl shadow-sm relative transition-all ${
                     isDeleted ? 'bg-slate-100/10 text-slate-400 border border-slate-200/20 italic backdrop-blur-sm' :
                     isOwn ? 'bg-primary-600 text-white rounded-br-sm shadow-lg shadow-primary-600/10' : 'bg-[#FFF9E3] text-slate-900 rounded-bl-sm border border-[#FFF5CC] shadow-lg shadow-lemon-white/5'
@@ -180,7 +242,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                                         <p className={`text-[9px] font-black uppercase tracking-tighter ${isOwn ? 'text-blue-100' : 'text-slate-400'}`}>
                                             Secure Voice Note
                                         </p>
-                                        <span className={`text-[9px] font-black ${isOwn ? 'text-blue-200' : 'text-slate-500'}`}>{msg.duration ? (msg.duration.toString().includes(':') ? msg.duration : `0:0${msg.duration}`) : '0:05'}</span>
+                                        <span className={`text-[9px] font-black ${isOwn ? 'text-blue-200' : 'text-slate-500'}`}>{durationLabel ? (durationLabel.toString().includes(':') ? durationLabel : `0:0${durationLabel}`) : '0:05'}</span>
                                     </div>
                                 </div>
                                 {decryptedUrl && (
@@ -324,8 +386,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                     {/* WhatsApp-Style Chevron Trigger (Visible on Hover) */}
                     {!isDeleted && (
                         <button 
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); setShowActionMenu(!showActionMenu); }}
-                            className={`absolute top-1 z-20 p-1.5 rounded-lg bg-white/80 backdrop-blur-sm border border-slate-100 shadow-sm transition-all opacity-0 group-hover:opacity-100 hover:bg-white text-slate-400 hover:text-primary-600 ${
+                            className={`absolute top-1 z-20 p-1.5 rounded-lg bg-white/80 backdrop-blur-sm border border-slate-100 shadow-sm transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:bg-white text-slate-400 hover:text-primary-600 ${
                                 isOwn ? 'right-2' : 'left-0 ml-[calc(100%-32px)]'
                             }`}
                         >
@@ -347,7 +410,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                                 initial={{ opacity: 0, scale: 0.95, y: 5 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95, y: 5 }}
-                                className={`absolute bottom-full mb-2 z-30 flex flex-col gap-1 ${isOwn ? 'right-0' : 'left-0'}`}
+                                className={`fixed inset-x-4 bottom-24 z-40 flex flex-col gap-1 md:absolute md:inset-x-auto md:bottom-full md:mb-2 ${isOwn ? 'md:right-0 md:left-auto' : 'md:left-0 md:right-auto'}`}
                             >
                                 <div className="flex flex-col bg-white border border-slate-100 shadow-2xl rounded-2xl p-1.5 min-w-[180px] overflow-hidden">
                                     {/* Reactions list */}

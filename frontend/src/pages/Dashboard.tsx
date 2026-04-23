@@ -62,12 +62,24 @@ export const Dashboard: React.FC = () => {
     const [lastMessages, setLastMessages] = useState<Record<string, any>>({});
     const [showProfilePanel, setShowProfilePanel] = useState(false);
     const [sharedGroups, setSharedGroups] = useState<any[]>([]);
+    const [isSharedGroupsLoading, setIsSharedGroupsLoading] = useState(false);
     const [showFindUsers, setShowFindUsers] = useState(false);
     const [searchFilters, setSearchFilters] = useState<{ media: boolean; links: boolean }>({ media: false, links: false });
     const [isKeyMismatch, setIsKeyMismatch] = useState(false);
     const [isRepairing, setIsRepairing] = useState(false);
     const [identityRepairReason, setIdentityRepairReason] = useState<'cloud_mismatch' | 'old_identity_message' | null>(null);
     const [showMonitor, setShowMonitor] = useState(true);
+    const [mutedChatIds, setMutedChatIds] = useState<Record<string, boolean>>(() => {
+        if (typeof window === 'undefined') {
+            return {};
+        }
+        try {
+            const raw = window.localStorage.getItem('securevault-muted-chats');
+            return raw ? JSON.parse(raw) : {};
+        } catch {
+            return {};
+        }
+    });
     const syncRequests = useRef<Map<string, number>>(new Map());
     
     // Status System State
@@ -157,6 +169,25 @@ export const Dashboard: React.FC = () => {
         const secs = seconds % 60;
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
+    const getEncryptedUploadName = (originalName: string, type: 'voice' | 'file') => {
+        const safeBaseName = originalName
+            .replace(/\.[^/.]+$/, '')
+            .replace(/[^a-zA-Z0-9-_]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 40) || (type === 'voice' ? 'voice-note' : 'attachment');
+        return `${safeBaseName}-encrypted`;
+    };
+    const toggleSelectedChatMute = React.useCallback(() => {
+        if (!selectedChat) return;
+        const targetId = getChatTargetId(selectedChat) || selectedChat.$id;
+        if (!targetId) return;
+
+        setMutedChatIds(prev => ({
+            ...prev,
+            [targetId]: !prev[targetId]
+        }));
+    }, [selectedChat]);
+    const selectedChatMuteId = selectedChat ? (getChatTargetId(selectedChat) || selectedChat.$id) : null;
     // Voice uploading state tracked
     const { callState, startCall, answerCall, endCall } = useWebRTC(user?.$id);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -179,6 +210,13 @@ export const Dashboard: React.FC = () => {
     useEffect(() => {
         checkKeyStatus();
     }, [user, privateKey]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            window.localStorage.setItem('securevault-muted-chats', JSON.stringify(mutedChatIds));
+        } catch {}
+    }, [mutedChatIds]);
 
 
 
@@ -218,31 +256,51 @@ export const Dashboard: React.FC = () => {
         let cancelled = false;
 
         const fetchSharedGroups = async () => {
-            if (!showProfilePanel || !selectedChat || selectedChat.type === 'group' || !selectedChat.user_id) {
+            if (!showProfilePanel || !selectedChat || selectedChat.type === 'group' || !selectedChat.user_id || !user?.$id) {
+                setIsSharedGroupsLoading(false);
                 setSharedGroups([]);
                 return;
             }
 
             try {
-                const membershipRes = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "group_members", [
-                    Query.equal("user_id", selectedChat.user_id),
-                    Query.limit(100)
+                setIsSharedGroupsLoading(true);
+
+                const [myMembershipsRes, contactMembershipsRes] = await Promise.all([
+                    databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "group_members", [
+                        Query.equal("user_id", user.$id),
+                        Query.limit(100)
+                    ]),
+                    databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "group_members", [
+                        Query.equal("user_id", selectedChat.user_id),
+                        Query.limit(100)
+                    ])
                 ]);
-                const sharedGroupIds = new Set(
-                    membershipRes.documents
+
+                const myGroupIds = new Set(
+                    myMembershipsRes.documents
                         .map((membership) => membership.group_id)
                         .filter(Boolean)
                 );
-                const overlappingGroups = groups.filter((group) => sharedGroupIds.has(group.$id));
+                const sharedGroupIds = [...new Set(
+                    contactMembershipsRes.documents
+                        .map((membership) => membership.group_id)
+                        .filter((groupId) => !!groupId && myGroupIds.has(groupId))
+                )];
 
-                if (!overlappingGroups.length) {
+                if (!sharedGroupIds.length) {
                     if (!cancelled) {
                         setSharedGroups([]);
+                        setIsSharedGroupsLoading(false);
                     }
                     return;
                 }
 
-                const enrichedGroups = await Promise.all(overlappingGroups.map(async (group) => {
+                const groupsRes = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "groups", [
+                    Query.equal("$id", sharedGroupIds),
+                    Query.limit(Math.min(sharedGroupIds.length, 100))
+                ]);
+
+                const enrichedGroups = await Promise.all(groupsRes.documents.map(async (group) => {
                     try {
                         const countRes = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "group_members", [
                             Query.equal("group_id", group.$id),
@@ -256,11 +314,13 @@ export const Dashboard: React.FC = () => {
 
                 if (!cancelled) {
                     setSharedGroups(enrichedGroups);
+                    setIsSharedGroupsLoading(false);
                 }
             } catch (error) {
                 console.error("Fetch shared groups failed", error);
                 if (!cancelled) {
                     setSharedGroups([]);
+                    setIsSharedGroupsLoading(false);
                 }
             }
         };
@@ -270,7 +330,7 @@ export const Dashboard: React.FC = () => {
         return () => {
             cancelled = true;
         };
-    }, [showProfilePanel, selectedChat, groups]);
+    }, [showProfilePanel, selectedChat, user?.$id]);
 
     useEffect(() => {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -1104,6 +1164,8 @@ export const Dashboard: React.FC = () => {
                 true,
                 ["encrypt", "decrypt"]
             );
+            const rawFileKey = await window.crypto.subtle.exportKey("raw", fileKey);
+            const rawFileKeyB64 = btoa(String.fromCharCode(...new Uint8Array(rawFileKey)));
 
             // 2. Encrypt the file
             const { blob, iv } = await HybridEncryptor.encryptFile(file, fileKey);
@@ -1112,7 +1174,7 @@ export const Dashboard: React.FC = () => {
             const uploadedFile = await storage.createFile(
                 APPWRITE_CONFIG.BUCKET_ID,
                 ID.unique(),
-                new File([blob], file.name)
+                new File([blob], getEncryptedUploadName(file.name, type), { type: 'application/octet-stream' })
             );
 
             // 4. Wrap the file key with recipient's public key (or group key)
@@ -1120,15 +1182,18 @@ export const Dashboard: React.FC = () => {
             if (selectedChat.type === 'group') {
                 const activeGroup = getResolvedGroupChat(selectedChat);
                 const groupKey = await decryptGroupKeyForChat(activeGroup);
-                const rawKey = await window.crypto.subtle.exportKey("raw", fileKey);
-                const rawKeyB64 = btoa(String.fromCharCode(...new Uint8Array(rawKey)));
-                encryptedKeyPayload = await HybridEncryptor.encryptSymmetric(rawKeyB64, groupKey);
+                encryptedKeyPayload = await HybridEncryptor.encryptSymmetric(rawFileKeyB64, groupKey);
             } else {
-                const recipientPubKey = await KeyManager.importPublicKey(selectedChat.public_key);
-                const rawKey = await window.crypto.subtle.exportKey("raw", fileKey);
+                const recipientPublicKeyStr = selectedChat.public_key || selectedChat.publicKey;
+                if (!recipientPublicKeyStr) {
+                    alert(`${selectedChat.username || "This user"} has not set up their secure vault yet. You cannot send them encrypted media.`);
+                    return;
+                }
+
+                const recipientPubKey = await KeyManager.importPublicKey(recipientPublicKeyStr);
                 
                 // Encrypt for Recipient
-                const encKeyRecipient = await HybridEncryptor.encryptKeyWithRSA(rawKey, recipientPubKey);
+                const encKeyRecipient = await HybridEncryptor.encryptKeyWithRSA(rawFileKey, recipientPubKey);
                 
                 // Encrypt for Sender (Self-Access)
                 const myPublicKeyStr = await KeyManager.getPublicKey();
@@ -1136,7 +1201,7 @@ export const Dashboard: React.FC = () => {
                 if (myPublicKeyStr) {
                     try {
                         const myPublicKey = await KeyManager.importPublicKey(myPublicKeyStr);
-                        encKeySender = await HybridEncryptor.encryptKeyWithRSA(rawKey, myPublicKey);
+                        encKeySender = await HybridEncryptor.encryptKeyWithRSA(rawFileKey, myPublicKey);
                     } catch (e) { console.error("Media self-encryption failed", e); }
                 }
 
@@ -1156,6 +1221,8 @@ export const Dashboard: React.FC = () => {
                     fileId: uploadedFile.$id,
                     fileName: file.name,
                     iv,
+                    originalMimeType: file.type,
+                    size: file.size,
                     encryptedKey: encryptedKeyPayload,
                     duration: duration ? formatDuration(duration) : undefined,
                     timestamp: new Date().toISOString(),
@@ -1172,6 +1239,7 @@ export const Dashboard: React.FC = () => {
                 ...msgPacket.payload,
                 text: type === 'voice' ? 'Voice message' : `File: ${file.name}`,
                 sender_id: user?.$id,
+                decryptedKeyBase64: rawFileKeyB64,
                 localFile: file // For immediate playback/rendering
             }]);
 
@@ -1250,8 +1318,13 @@ export const Dashboard: React.FC = () => {
 
             const decryptedMessages = await Promise.all(res.documents.map(async (m) => {
                 try {
+                    if (m.is_deleted) {
+                        return { ...m, text: "", mediaData: null };
+                    }
+
                     let text: string | null = null;
                     let mediaData: any = null;
+                    let resolvedPayload: any = {};
                     const isMedia = m.type === 'voice' || m.type === 'file';
 
                     if (!availablePrivateKeys.length && !isGroup) {
@@ -1284,6 +1357,7 @@ export const Dashboard: React.FC = () => {
                                     }
                                 } catch (e) {}
                                 const msgPayload = (typeof m.payload === 'string') ? JSON.parse(m.payload) : (m.payload || m);
+                                resolvedPayload = typeof msgPayload === 'object' && msgPayload ? msgPayload : {};
 
                                 if (isMedia) {
                                     const mediaKeySource = (typeof keys === 'object') ? (keys.encryptedKey || keys.encrypted_key) : keys;
@@ -1311,6 +1385,7 @@ export const Dashboard: React.FC = () => {
                         try {
                             const isOwn = m.sender_id === user?.$id;
                             const msgPayload = (typeof m.payload === 'string') ? JSON.parse(m.payload) : (m.payload || m);
+                            resolvedPayload = typeof msgPayload === 'object' && msgPayload ? msgPayload : {};
                             
                             let keys = m.encrypted_key || m.encryptedKey;
                             if (typeof keys === 'string') {
@@ -1369,7 +1444,8 @@ export const Dashboard: React.FC = () => {
                     }
                     return { 
                         ...m, 
-                        text: text || (m.type === 'voice' ? 'Voice message' : `File: ${m.fileName || m.filename}`),
+                        ...resolvedPayload,
+                        text: text || ((resolvedPayload.type || m.type) === 'voice' ? 'Voice message' : `File: ${resolvedPayload.fileName || m.fileName || m.filename || 'Attachment'}`),
                         mediaData,
                         latency: HybridEncryptor.metrics.lastDecryptionTime
                     };
@@ -1895,7 +1971,7 @@ const isLink = searchText.includes("http");
                                             initial={{ opacity: 0, y: 20, scale: 0.95 }}
                                             animate={{ opacity: 1, y: 0, scale: 1 }}
                                             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                                            className="absolute bottom-full left-0 mb-6 z-50 overflow-hidden"
+                                            className="absolute bottom-full left-1/2 -translate-x-1/2 md:left-0 md:translate-x-0 mb-4 md:mb-6 z-50 overflow-visible"
                                         >
                                             <GiphyPicker onSelect={(gif) => handleSendMessage(undefined, gif.images.fixed_height.url)} onClose={() => setShowGiphy(false)} />
                                         </motion.div>
@@ -1911,9 +1987,11 @@ const isLink = searchText.includes("http");
                                             onChange={(e) => {
                                                 const file = e.target.files?.[0];
                                                 if (file) handleMediaUpload(file, 'file');
+                                                e.currentTarget.value = '';
                                             }} 
                                         />
                                         <button 
+                                            type="button"
                                             onClick={() => fileInputRef.current?.click()}
                                             disabled={isVoiceUploading}
                                             className={`p-3 md:p-4 hover:bg-white/10 rounded-full transition-colors text-slate-500 hover:text-white ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -1921,6 +1999,7 @@ const isLink = searchText.includes("http");
                                             <Paperclip className="w-5 h-5 md:w-6 md:h-6" />
                                         </button>
                                         <button 
+                                            type="button"
                                             onClick={() => setShowGiphy(!showGiphy)} 
                                             disabled={isVoiceUploading}
                                             className={`p-3 md:p-4 rounded-full transition-colors ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''} ${showGiphy ? 'bg-primary-600 text-white' : 'hover:bg-white/10 text-slate-500 hover:text-white'}`}
@@ -1938,14 +2017,18 @@ const isLink = searchText.includes("http");
                                     
                                     <div className="flex items-center gap-1 md:gap-2 pb-1 md:pb-1.5 shrink-0">
                                         <button 
-                                            onMouseDown={startRecording}
-                                            onMouseUp={stopRecording}
+                                            type="button"
+                                            onPointerDown={startRecording}
+                                            onPointerUp={stopRecording}
+                                            onPointerLeave={stopRecording}
+                                            onPointerCancel={stopRecording}
                                             disabled={isVoiceUploading}
                                             className={`p-3 md:p-4 rounded-full transition-all ${isRecording ? 'bg-red-500 scale-110 animate-pulse text-white' : 'hover:bg-white/10 text-slate-500 hover:text-white'} ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                                         >
                                             <Mic className="w-5 h-5 md:w-6 md:h-6" />
                                         </button>
                                         <button 
+                                            type="button"
                                             onClick={() => handleSendMessage()}
                                             disabled={isVoiceUploading || (!newMessage.trim() && !newMessage)}
                                             className={`p-3 md:p-4 bg-linear-to-br from-primary-600 to-indigo-700 hover:from-primary-500 hover:to-indigo-600 text-white rounded-full transition-all shadow-xl shadow-primary-500/30 active:scale-95 ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -2183,7 +2266,11 @@ const isLink = searchText.includes("http");
                 messages={messages}
                 getAvatarUrl={getUserAvatar}
                 sharedGroups={sharedGroups}
+                sharedGroupsLoading={isSharedGroupsLoading}
                 onStartCall={handleStartCall}
+                isMuted={selectedChatMuteId ? !!mutedChatIds[selectedChatMuteId] : false}
+                onToggleMute={toggleSelectedChatMute}
+                onReport={() => setShowReport(true)}
             />
 
             <FindUsersModal

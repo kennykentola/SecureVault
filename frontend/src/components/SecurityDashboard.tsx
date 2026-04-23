@@ -24,7 +24,7 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ messages }
         .reduce((acc, m, _, arr) => acc + m.latency / arr.length, 0);
 
     return (
-        <div className="fixed bottom-6 left-6 z-100">
+        <div className="hidden md:block fixed bottom-6 left-6 z-100">
             <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}

@@ -153,6 +153,10 @@ def build_message_payloads(user_id: str, recipient_id: str, payload: dict, save_
     extended_payload = dict(legacy_payload)
     extended_payload["group_id"] = recipient_id if is_group else ""
     extended_payload["sender_name"] = payload.get("sender_name", "")
+    try:
+        extended_payload["payload"] = json.dumps(payload)
+    except Exception:
+        extended_payload["payload"] = ""
 
     return extended_payload, legacy_payload
 
@@ -401,12 +405,27 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                         try:
                             if not recipient_is_group(msg, recipient_id):
                                 recipient_id = normalize_direct_recipient_id(recipient_id)
-                            databases.update_document(APPWRITE_DATABASE_ID, APPWRITE_MESSAGES_COLLECTION, msg_id, {
+                            update_data = {
                                 "ciphertext": payload.get("ciphertext"),
                                 "hash": payload.get("hash"),
                                 "iv": payload.get("iv"),
                                 "is_edited": True
-                            })
+                            }
+                            try:
+                                databases.update_document(
+                                    APPWRITE_DATABASE_ID,
+                                    APPWRITE_MESSAGES_COLLECTION,
+                                    msg_id,
+                                    {**update_data, "payload": json.dumps(payload)}
+                                )
+                            except Exception as payload_update_error:
+                                print(f"[WS Edit Notice] Payload update unavailable, falling back to legacy fields: {payload_update_error}")
+                                databases.update_document(
+                                    APPWRITE_DATABASE_ID,
+                                    APPWRITE_MESSAGES_COLLECTION,
+                                    msg_id,
+                                    update_data
+                                )
                             outbound = build_outbound_message(
                                 msg,
                                 sender_id=user_id,
