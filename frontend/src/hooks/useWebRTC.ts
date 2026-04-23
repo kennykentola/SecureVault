@@ -70,11 +70,11 @@ export const useWebRTC = (userId: string | undefined) => {
             newPeer.on('error', (err) => {
                 if (isCancelled || peerRef.current !== newPeer) return;
                 console.error('PeerJS Error:', err.type, err);
+
                 if (err.type === 'unavailable-id') {
-                    console.warn(`ID ${userId} is taken. Retrying in 2 seconds...`);
-                    if (retryTimerRef.current) {
-                        window.clearTimeout(retryTimerRef.current);
-                    }
+                    // Our own peer ID is taken — retry with a delay
+                    console.warn(`PeerJS ID ${userId} is already registered. Retrying in 2s...`);
+                    if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
                     retryTimerRef.current = window.setTimeout(() => {
                         if (isCancelled || newPeer.destroyed) return;
                         newPeer.destroy();
@@ -84,6 +84,27 @@ export const useWebRTC = (userId: string | undefined) => {
                         }
                         initPeer();
                     }, 2000);
+
+                } else if (err.type === 'peer-unavailable') {
+                    // Remote peer is offline or hasn't registered with PeerJS yet
+                    alert('The person you are calling is not available right now.\nThey may be offline or have not opened the app.');
+                    // End any outgoing call state cleanly
+                    if (currentCall.current) {
+                        currentCall.current.close();
+                        currentCall.current = null;
+                    }
+                    setCallState(prev => {
+                        if (prev.localStream) prev.localStream.getTracks().forEach(t => t.stop());
+                        return { ...INITIAL_CALL_STATE };
+                    });
+
+                } else if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
+                    // Transient connectivity issue — log only, PeerJS will reconnect
+                    console.warn('PeerJS transient error:', err.type, '— will reconnect automatically.');
+
+                } else {
+                    // Unknown / fatal error
+                    console.error('PeerJS fatal error:', err.type, err.message);
                 }
             });
 
