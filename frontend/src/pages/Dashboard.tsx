@@ -61,6 +61,7 @@ export const Dashboard: React.FC = () => {
     const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
     const [lastMessages, setLastMessages] = useState<Record<string, any>>({});
     const [showProfilePanel, setShowProfilePanel] = useState(false);
+    const [sharedGroups, setSharedGroups] = useState<any[]>([]);
     const [showFindUsers, setShowFindUsers] = useState(false);
     const [searchFilters, setSearchFilters] = useState<{ media: boolean; links: boolean }>({ media: false, links: false });
     const [isKeyMismatch, setIsKeyMismatch] = useState(false);
@@ -212,6 +213,64 @@ export const Dashboard: React.FC = () => {
             setAudioBlob(null);
         }
     }, [audioBlob]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const fetchSharedGroups = async () => {
+            if (!showProfilePanel || !selectedChat || selectedChat.type === 'group' || !selectedChat.user_id) {
+                setSharedGroups([]);
+                return;
+            }
+
+            try {
+                const membershipRes = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "group_members", [
+                    Query.equal("user_id", selectedChat.user_id),
+                    Query.limit(100)
+                ]);
+                const sharedGroupIds = new Set(
+                    membershipRes.documents
+                        .map((membership) => membership.group_id)
+                        .filter(Boolean)
+                );
+                const overlappingGroups = groups.filter((group) => sharedGroupIds.has(group.$id));
+
+                if (!overlappingGroups.length) {
+                    if (!cancelled) {
+                        setSharedGroups([]);
+                    }
+                    return;
+                }
+
+                const enrichedGroups = await Promise.all(overlappingGroups.map(async (group) => {
+                    try {
+                        const countRes = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "group_members", [
+                            Query.equal("group_id", group.$id),
+                            Query.limit(1)
+                        ]);
+                        return { ...group, memberCount: countRes.total };
+                    } catch (error) {
+                        return group;
+                    }
+                }));
+
+                if (!cancelled) {
+                    setSharedGroups(enrichedGroups);
+                }
+            } catch (error) {
+                console.error("Fetch shared groups failed", error);
+                if (!cancelled) {
+                    setSharedGroups([]);
+                }
+            }
+        };
+
+        fetchSharedGroups();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [showProfilePanel, selectedChat, groups]);
 
     useEffect(() => {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -2123,6 +2182,7 @@ const isLink = searchText.includes("http");
                 item={selectedChat}
                 messages={messages}
                 getAvatarUrl={getUserAvatar}
+                sharedGroups={sharedGroups}
                 onStartCall={handleStartCall}
             />
 

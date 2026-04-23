@@ -29,19 +29,69 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
     const [isGeneratingCode, setIsGeneratingCode] = React.useState(false);
     const [securityCode, setSecurityCode] = React.useState<string | null>(null);
     const [securityMessage, setSecurityMessage] = React.useState<string | null>(null);
+    const [groupMemberCount, setGroupMemberCount] = React.useState<number | null>(null);
     const isGroup = item?.type === 'group' || !!item?.group_id;
     const name = item?.username || item?.name || "Unknown";
     const bio = item?.bio || item?.description || (isGroup ? "Group description" : "Hey there! I'm using SecureVault.");
-    const avatarUrl = item ? getAvatarUrl(isGroup ? item.$id : item.avatar_id) : undefined;
+    const avatarUrl = item ? getAvatarUrl(item.avatar_id) : undefined;
 
     // Filter shared media
     const mediaMessages = messages.filter(m => m.type === 'file' || m.type === 'voice' || m.gif_url);
+
+    const statusLabel = isGroup
+        ? `${groupMemberCount ?? item?.memberCount ?? 0} Members`
+        : item?.status === 'online'
+            ? 'Online'
+            : 'Offline';
+
+    const updatedLabel = item?.$updatedAt
+        ? `Updated ${new Date(item.$updatedAt).toLocaleDateString([], {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        })}`
+        : isGroup
+            ? 'Group details sync securely'
+            : 'Profile details sync securely';
 
     React.useEffect(() => {
         setIsGeneratingCode(false);
         setSecurityCode(null);
         setSecurityMessage(null);
+        setGroupMemberCount(null);
     }, [isOpen, item?.$id, item?.user_id]);
+
+    React.useEffect(() => {
+        let ignore = false;
+
+        const fetchGroupMemberCount = async () => {
+            if (!isOpen || !isGroup || !item?.$id) {
+                setGroupMemberCount(null);
+                return;
+            }
+
+            try {
+                const res = await databases.listDocuments(
+                    APPWRITE_CONFIG.DATABASE_ID,
+                    "group_members",
+                    [Query.equal("group_id", item.$id), Query.limit(1)]
+                );
+                if (!ignore) {
+                    setGroupMemberCount(res.total);
+                }
+            } catch (error) {
+                if (!ignore) {
+                    setGroupMemberCount(item?.memberCount ?? null);
+                }
+            }
+        };
+
+        fetchGroupMemberCount();
+
+        return () => {
+            ignore = true;
+        };
+    }, [isOpen, isGroup, item?.$id, item?.memberCount]);
 
     const buildSecurityCode = async (localKey: string, remoteKey: string) => {
         const encoder = new TextEncoder();
@@ -129,7 +179,7 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                 <button onClick={onClose} className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg">
                                     <X className="w-5 h-5" />
                                 </button>
-                                <h2 className="text-lg font-bold text-slate-800">Contact Info</h2>
+                                <h2 className="text-lg font-bold text-slate-800">{isGroup ? 'Group Info' : 'Contact Info'}</h2>
                             </div>
                         </header>
 
@@ -152,7 +202,7 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                 <div className="text-center space-y-2">
                                     <h3 className="text-2xl font-black italic tracking-tighter text-slate-900">{name}</h3>
                                     <p className="text-sm font-medium text-slate-500 tracking-tight">
-                                        {isGroup ? `${item.memberCount || 0} Members` : (item.status === 'online' ? 'Online' : 'Yesterday at 9:00 PM')}
+                                        {statusLabel}
                                     </p>
                                 </div>
 
@@ -161,7 +211,7 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                     {[
                                         { icon: <Phone />, label: 'Audio', onClick: () => onStartCall?.('voice'), disabled: isGroup || !onStartCall },
                                         { icon: <Video />, label: 'Video', onClick: () => onStartCall?.('video'), disabled: isGroup || !onStartCall },
-                                        { icon: <Search />, label: 'Search' },
+                                        { icon: <Search />, label: 'Search', disabled: true },
                                     ].map((action, i) => (
                                         <button
                                             key={i}
@@ -170,16 +220,14 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                             disabled={!!action.disabled}
                                             className="flex flex-col items-center gap-2 group disabled:cursor-not-allowed"
                                         >
-                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm transition-all ${
-                                                action.disabled
+                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm transition-all ${action.disabled
                                                     ? 'bg-slate-100 text-slate-300'
                                                     : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
-                                            }`}>
+                                                }`}>
                                                 {React.cloneElement(action.icon as React.ReactElement<{ className?: string }>, { className: 'w-5 h-5' })}
                                             </div>
-                                            <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${
-                                                action.disabled ? 'text-slate-300' : 'text-slate-400 group-hover:text-blue-600'
-                                            }`}>{action.label}</span>
+                                            <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${action.disabled ? 'text-slate-300' : 'text-slate-400 group-hover:text-blue-600'
+                                                }`}>{action.label}</span>
                                         </button>
                                     ))}
                                 </div>
@@ -187,28 +235,29 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
 
                             {/* Info Sections */}
                             <div className="p-4 space-y-4 pb-12">
-                                {/* Bio Section */}
-                                <section className="bg-white p-6 rounded-4xl border border-slate-100 shadow-sm space-y-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500">
-                                            <Phone className="w-4 h-4" />
+                                {!isGroup && (
+                                    <section className="bg-white p-6 rounded-4xl border border-slate-100 shadow-sm space-y-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500">
+                                                <Phone className="w-4 h-4" />
+                                            </div>
+                                            <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-700">Phone Number</h4>
                                         </div>
-                                        <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-700">Phone Number</h4>
-                                    </div>
-                                    <p className="text-sm text-slate-700 leading-relaxed font-medium">
-                                        {item.phone || "Not provided"}
-                                    </p>
-                                    <p className="text-[10px] text-slate-400 font-medium leading-normal italic text-center">
-                                        Used for discovery and secure E2EE key lookup.
-                                    </p>
-                                </section>
+                                        <p className="text-sm text-slate-700 leading-relaxed font-medium">
+                                            {item.phone || "Not provided"}
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 font-medium leading-normal italic text-center">
+                                            Used for discovery and secure E2EE key lookup.
+                                        </p>
+                                    </section>
+                                )}
 
                                 <section className="bg-white p-6 rounded-4xl border border-slate-100 shadow-sm space-y-4">
                                     <div className="space-y-1">
                                         <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">About / Status</h4>
                                         <p className="text-sm text-slate-700 leading-relaxed font-medium">{bio}</p>
                                     </div>
-                                    <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest pt-2">Updated: Dec 12, 2026</p>
+                                    <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest pt-2">{updatedLabel}</p>
                                 </section>
 
                                 {/* Media Section */}
@@ -257,17 +306,22 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                     </p>
                                     <button
                                         onClick={handleVerifySecurityCode}
-                                        disabled={isGeneratingCode}
+                                        disabled={isGeneratingCode || isGroup}
                                         className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline disabled:text-slate-300 disabled:no-underline disabled:cursor-not-allowed flex items-center gap-2"
                                     >
                                         {isGeneratingCode && <Loader2 className="w-3 h-3 animate-spin" />}
-                                        {isGeneratingCode ? 'Generating Code...' : 'Verify Security Code'}
+                                        {isGroup ? 'Available In Direct Chats' : (isGeneratingCode ? 'Generating Code...' : 'Verify Security Code')}
                                     </button>
                                     {securityCode && (
                                         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Security Code</p>
-                                            <p className="text-sm font-mono font-bold tracking-[0.2em] text-slate-800 `wrap-break-words`">{securityCode}</p>
+                                            <p className="text-sm font-mono font-bold tracking-[0.2em] text-slate-800 `wrap-break-word`">{securityCode}</p>
                                         </div>
+                                    )}
+                                    {isGroup && !securityMessage && (
+                                        <p className="text-[10px] font-medium leading-relaxed text-slate-400">
+                                            Security code comparison is currently supported for one-to-one chats only.
+                                        </p>
                                     )}
                                     {securityMessage && (
                                         <p className={`text-[10px] font-medium leading-relaxed ${securityCode ? 'text-slate-400' : 'text-amber-600'}`}>
@@ -289,11 +343,17 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                             {sharedGroups.length > 0 ? sharedGroups.map((g, i) => (
                                                 <div key={i} className="flex items-center gap-3">
                                                     <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center text-xs font-bold">
-                                                        {g.avatar ? <img src={g.avatar} className="w-full h-full object-cover" /> : g.name[0]}
+                                                        {g.avatar ? (
+                                                            <img src={g.avatar} className="w-full h-full object-cover" />
+                                                        ) : g.avatar_id ? (
+                                                            <img src={getAvatarUrl(g.avatar_id)} className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            g.name[0]
+                                                        )}
                                                     </div>
                                                     <div>
                                                         <p className="text-xs font-bold text-slate-800">{g.name}</p>
-                                                        <p className="text-[10px] text-slate-400 font-medium">{g.members} Members</p>
+                                                        <p className="text-[10px] text-slate-400 font-medium">{g.memberCount || g.members || 0} Members</p>
                                                     </div>
                                                 </div>
                                             )) : (
