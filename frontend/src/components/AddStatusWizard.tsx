@@ -90,14 +90,7 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
             try {
                 const statusKeyExported = await KeyManager.exportSecretKey(statusKey);
                 const viewers = availableContacts.filter(c => !excludedUsers.includes(c.user_id));
-                
-                // Fetch current user's full profile to get public key for self-sharing
-                const selfProfileRes = await databases.listDocuments(
-                    APPWRITE_CONFIG.DATABASE_ID, 
-                    APPWRITE_CONFIG.COLLECTION_USERS, 
-                    [Query.equal("user_id", user?.$id)]
-                );
-                const selfProfile = selfProfileRes.documents[0];
+                const selfPublicKeyBase64 = await KeyManager.getPublicKey();
 
                 await Promise.all(viewers.map(async (viewer) => {
                     if (viewer.public_key) {
@@ -117,9 +110,9 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
                     }
                 }));
 
-                // Also share with self so we can view it
-                if (selfProfile?.public_key) {
-                    const selfPublicKey = await KeyManager.importPublicKey(selfProfile.public_key);
+                // Also share with the currently unlocked local identity so new posts survive cloud key drift.
+                if (selfPublicKeyBase64) {
+                    const selfPublicKey = await KeyManager.importPublicKey(selfPublicKeyBase64);
                     await databases.createDocument(APPWRITE_CONFIG.DATABASE_ID, "status_keys", ID.unique(), {
                         poster_id: user?.$id,
                         recipient_id: user?.$id,
@@ -127,7 +120,7 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
                         created_at: new Date().toISOString()
                     });
                 } else {
-                    console.warn("[Security] Self public key missing. Skipping self-key-sharing.");
+                    console.warn("[Security] Local self public key missing. Skipping self-key-sharing.");
                 }
 
             } catch (kErr) {

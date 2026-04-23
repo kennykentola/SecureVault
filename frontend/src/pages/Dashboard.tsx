@@ -318,13 +318,51 @@ export const Dashboard: React.FC = () => {
     };
 
     const fetchMyGroups = async () => {
+        if (!user?.$id) {
+            setGroups([]);
+            return;
+        }
+
         try {
-            const res = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "group_members", [Query.equal("user_id", user?.$id)]);
-            const groupDetails = await Promise.all(res.documents.map(async (m) => {
-                const g = await databases.getDocument(APPWRITE_CONFIG.DATABASE_ID, "groups", m.group_id);
-                return { ...g, encrypted_group_key: m.encrypted_group_key };
-            }));
-            setGroups(groupDetails);
+            const res = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "group_members", [
+                Query.equal("user_id", user.$id),
+                Query.limit(100)
+            ]);
+            const memberships = res.documents.filter((membership) => !!membership.group_id);
+
+            if (!memberships.length) {
+                setGroups([]);
+                return;
+            }
+
+            const groupIds = [...new Set(memberships.map((membership) => membership.group_id))];
+            const groupsRes = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "groups", [
+                Query.equal("$id", groupIds),
+                Query.limit(Math.min(groupIds.length, 100))
+            ]);
+
+            const membershipByGroupId = new Map(
+                memberships.map((membership) => [membership.group_id, membership])
+            );
+            const foundGroupIds = new Set(groupsRes.documents.map((group) => group.$id));
+            const staleMemberships = memberships.filter((membership) => !foundGroupIds.has(membership.group_id));
+
+            staleMemberships.forEach((membership) => {
+                console.warn(`[Groups] Skipping stale membership for group ${membership.group_id} (group no longer exists).`);
+            });
+
+            if (staleMemberships.length) {
+                await Promise.allSettled(
+                    staleMemberships.map((membership) => (
+                        databases.deleteDocument(APPWRITE_CONFIG.DATABASE_ID, "group_members", membership.$id)
+                    ))
+                );
+            }
+
+            setGroups(groupsRes.documents.map((group) => ({
+                ...group,
+                encrypted_group_key: membershipByGroupId.get(group.$id)?.encrypted_group_key
+            })));
         } catch (e) { console.error("Fetch groups failed", e); }
     };
 
@@ -1390,6 +1428,26 @@ export const Dashboard: React.FC = () => {
         }
     };
 
+    const handleStartCall = (type: 'voice' | 'video') => {
+        if (!selectedChat) {
+            alert("Open a one-to-one chat before starting a call.");
+            return;
+        }
+
+        if (selectedChat.type === 'group') {
+            alert("Voice and video calls are currently available for one-to-one chats only.");
+            return;
+        }
+
+        const chatTargetId = getChatTargetId(selectedChat);
+        if (!chatTargetId) {
+            alert("This contact is missing a valid account id. Ask them to sign in again so their profile can sync.");
+            return;
+        }
+
+        startCall(chatTargetId, type);
+    };
+
     return (
         <div className="h-screen flex bg-vault text-slate-100 overflow-hidden font-sans selection:bg-primary-500/30">
             <div className="vault-overlay" />
@@ -1436,16 +1494,18 @@ export const Dashboard: React.FC = () => {
                                             <Settings className="w-4 h-4 text-slate-600" />
                                             Settings
                                         </button>
-                                        <div className="md:hidden border-t border-slate-100 my-1 py-1">
-                                            <button onClick={() => { startCall(user?.$id!, 'voice'); setShowTopMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-800 hover:bg-slate-50 transition-colors flex items-center gap-3">
+                                        {selectedChat && selectedChat.type !== 'group' && (
+                                            <div className="md:hidden border-t border-slate-100 my-1 py-1">
+                                            <button onClick={() => { handleStartCall('voice'); setShowTopMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-800 hover:bg-slate-50 transition-colors flex items-center gap-3">
                                                 <Phone className="w-4 h-4 text-slate-600" />
                                                 Voice Call
                                             </button>
-                                            <button onClick={() => { startCall(user?.$id!, 'video'); setShowTopMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-800 hover:bg-slate-50 transition-colors flex items-center gap-3">
+                                            <button onClick={() => { handleStartCall('video'); setShowTopMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-800 hover:bg-slate-50 transition-colors flex items-center gap-3">
                                                 <Video className="w-4 h-4 text-slate-600" />
                                                 Video Call
                                             </button>
-                                        </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -1687,9 +1747,13 @@ export const Dashboard: React.FC = () => {
                                 {selectedChat.type === 'group' && (
                                     <button onClick={() => setShowAddMember(true)} className="p-2.5 md:p-3 bg-indigo-50 hover:bg-indigo-100 rounded-2xl transition-all text-indigo-600"><Plus className="w-5 h-5" /></button>
                                 )}
-                                <button onClick={() => { const chatTargetId = getChatTargetId(selectedChat); if (chatTargetId) startCall(chatTargetId, 'voice'); }} className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Phone className="w-4 h-4 md:w-5 md:h-5" /></button>
-                                <button onClick={() => { const chatTargetId = getChatTargetId(selectedChat); if (chatTargetId) startCall(chatTargetId, 'video'); }} className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Video className="w-4 h-4 md:w-5 md:h-5" /></button>
-                                <button onClick={() => setShowGroupDetail(true)} className="p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><MoreVertical className="w-4 h-4 md:w-5 md:h-5" /></button>
+                                {selectedChat.type !== 'group' && (
+                                    <>
+                                        <button onClick={() => handleStartCall('voice')} className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Phone className="w-4 h-4 md:w-5 md:h-5" /></button>
+                                        <button onClick={() => handleStartCall('video')} className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Video className="w-4 h-4 md:w-5 md:h-5" /></button>
+                                    </>
+                                )}
+                                <button onClick={() => selectedChat.type === 'group' ? setShowGroupDetail(true) : setShowProfilePanel(true)} className="p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><MoreVertical className="w-4 h-4 md:w-5 md:h-5" /></button>
                             </div>
                         </header>
 
@@ -1995,14 +2059,6 @@ const isLink = searchText.includes("http");
                     )}
                 </AnimatePresence>
             </main>
-
-            {/* Embedded Call UI (WhatsApp style) */}
-            <CallModal 
-                callState={callState} 
-                onAnswer={answerCall} 
-                onEnd={endCall} 
-            />
-
             <PinInput isOpen={showUnlockModal} onComplete={handleUnlock} onSetup={setupNewVault} />
             
             {/* New Group Modals */}
@@ -2038,8 +2094,15 @@ const isLink = searchText.includes("http");
                 user={user} 
                 onViewed={(id) => {
                     // Update viewers in background
+                    const nextViewers = Array.from(new Set([
+                        ...(selectedStatuses.find(s => s.$id === id)?.viewers || []),
+                        user?.$id
+                    ].filter(Boolean)));
+                    setSelectedStatuses(prev => prev.map(status => (
+                        status.$id === id ? { ...status, viewers: nextViewers } : status
+                    )));
                     databases.updateDocument(APPWRITE_CONFIG.DATABASE_ID, "statuses", id, {
-                        viewers: [...(selectedStatuses.find(s => s.$id === id)?.viewers || []), user?.$id]
+                        viewers: nextViewers
                     }).catch(console.error);
                 }} 
                 onDeleted={() => setRefreshStatusTrigger(prev => prev + 1)}
@@ -2049,9 +2112,8 @@ const isLink = searchText.includes("http");
                 isOpen={showAddStatus} 
                 onClose={() => setShowAddStatus(false)} 
                 onSuccess={() => {
-                    // Refresh status list if it was a child ref, 
-                    // but since StatusList has own useEffect, it works on remount or can be triggered.
                     setSidebarTab('updates'); 
+                    setRefreshStatusTrigger(prev => prev + 1);
                 }} 
             />
 
@@ -2061,6 +2123,7 @@ const isLink = searchText.includes("http");
                 item={selectedChat}
                 messages={messages}
                 getAvatarUrl={getUserAvatar}
+                onStartCall={handleStartCall}
             />
 
             <FindUsersModal

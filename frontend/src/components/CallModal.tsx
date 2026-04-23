@@ -12,19 +12,37 @@ interface CallModalProps {
 }
 
 export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd }) => {
-    const handleLocalVideoRef = (el: HTMLVideoElement | null) => {
-        if (el && callState.localStream) {
-            el.srcObject = callState.localStream;
-            el.play().catch(e => console.warn("Local video playback failed", e));
-        }
-    };
+    const localVideoRef = React.useRef<HTMLVideoElement | null>(null);
+    const remoteVideoRef = React.useRef<HTMLVideoElement | null>(null);
+    const remoteAudioRef = React.useRef<HTMLAudioElement | null>(null);
 
-    const handleRemoteVideoRef = (el: HTMLVideoElement | null) => {
-        if (el && callState.remoteStream) {
-            el.srcObject = callState.remoteStream;
-            el.play().catch(e => console.warn("Remote video playback failed", e));
+    React.useEffect(() => {
+        if (localVideoRef.current) {
+            localVideoRef.current.srcObject = callState.localStream || null;
+            if (callState.localStream) {
+                localVideoRef.current.play().catch(e => console.warn("Local video playback failed", e));
+            }
         }
-    };
+    }, [callState.localStream]);
+
+    React.useEffect(() => {
+        if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = callState.remoteStream || null;
+            if (callState.remoteStream) {
+                remoteVideoRef.current.play().catch(e => console.warn("Remote video playback failed", e));
+            }
+        }
+    }, [callState.remoteStream]);
+
+    React.useEffect(() => {
+        if (remoteAudioRef.current) {
+            const shouldUseAudioElement = callState.callType === 'voice';
+            remoteAudioRef.current.srcObject = shouldUseAudioElement ? callState.remoteStream : null;
+            if (shouldUseAudioElement && callState.remoteStream) {
+                remoteAudioRef.current.play().catch(e => console.warn("Remote audio playback failed", e));
+            }
+        }
+    }, [callState.callType, callState.remoteStream]);
 
     if (!callState.isIncoming && !callState.isOutgoing && !callState.isActive) return null;
 
@@ -58,7 +76,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                             <>
                                 <div className="hidden md:flex items-center gap-2 mr-4 bg-black/20 rounded-xl p-1 pr-3">
                                     <div className="w-16 aspect-video bg-black rounded-lg overflow-hidden border border-white/10">
-                                        <video ref={handleLocalVideoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
+                                        <video ref={localVideoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
                                     </div>
                                     <span className="text-[9px] font-bold text-white/50 uppercase">You</span>
                                 </div>
@@ -73,7 +91,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                     <PhoneOff className="w-4 h-4" /> Decline
                                 </button>
                                 <button onClick={onAnswer} className="px-6 py-2.5 bg-green-500 hover:bg-green-600 rounded-xl text-white text-xs font-bold transition-all shadow-lg shadow-green-500/20 animate-pulse flex items-center gap-2">
-                                    <Video className="w-4 h-4" /> Answer
+                                    {callState.callType === 'video' ? <Video className="w-4 h-4" /> : <Mic className="w-4 h-4" />} Answer
                                 </button>
                             </div>
                         ) : (
@@ -92,7 +110,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                         className="p-4 pt-0"
                     >
                         <div className="w-full max-w-sm ml-auto aspect-video bg-black rounded-2xl overflow-hidden border border-white/20 shadow-2xl relative">
-                            <video ref={handleRemoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                            <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
                             <div className="absolute bottom-3 left-3 px-2 py-1 bg-black/40 backdrop-blur-md rounded-lg border border-white/10">
                                 <p className="text-[9px] font-black text-white uppercase tracking-widest">{callState.caller}</p>
                             </div>
@@ -100,7 +118,9 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                     </motion.div>
                 )}
                 {/* Hidden Audio for Voice and Video Sync */}
-                <audio ref={handleRemoteVideoRef} autoPlay playsInline />
+                {callState.isActive && callState.callType === 'voice' && (
+                    <audio ref={remoteAudioRef} autoPlay playsInline />
+                )}
             </motion.div>
         </AnimatePresence>
     );

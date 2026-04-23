@@ -13,6 +13,7 @@ interface ProfileSidePanelProps {
     messages: any[];
     getAvatarUrl: (id: string | null | undefined, bucketId?: string) => string | undefined;
     sharedGroups?: any[];
+    onStartCall?: (type: 'voice' | 'video') => void;
 }
 
 export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
@@ -21,7 +22,8 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
     item,
     messages,
     getAvatarUrl,
-    sharedGroups = []
+    sharedGroups = [],
+    onStartCall
 }) => {
     const { user } = useAuth();
     const [isGeneratingCode, setIsGeneratingCode] = React.useState(false);
@@ -157,15 +159,27 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                 {/* Quick Actions */}
                                 <div className="flex items-center gap-6 mt-8">
                                     {[
-                                        { icon: <Phone />, label: 'Audio' },
-                                        { icon: <Video />, label: 'Video' },
+                                        { icon: <Phone />, label: 'Audio', onClick: () => onStartCall?.('voice'), disabled: isGroup || !onStartCall },
+                                        { icon: <Video />, label: 'Video', onClick: () => onStartCall?.('video'), disabled: isGroup || !onStartCall },
                                         { icon: <Search />, label: 'Search' },
                                     ].map((action, i) => (
-                                        <button key={i} className="flex flex-col items-center gap-2 group">
-                                            <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 transition-all group-hover:bg-blue-600 group-hover:text-white shadow-sm">
+                                        <button
+                                            key={i}
+                                            type="button"
+                                            onClick={action.onClick}
+                                            disabled={!!action.disabled}
+                                            className="flex flex-col items-center gap-2 group disabled:cursor-not-allowed"
+                                        >
+                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm transition-all ${
+                                                action.disabled
+                                                    ? 'bg-slate-100 text-slate-300'
+                                                    : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'
+                                            }`}>
                                                 {React.cloneElement(action.icon as React.ReactElement<{ className?: string }>, { className: 'w-5 h-5' })}
                                             </div>
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-blue-600 transition-colors">{action.label}</span>
+                                            <span className={`text-[10px] font-black uppercase tracking-widest transition-colors ${
+                                                action.disabled ? 'text-slate-300' : 'text-slate-400 group-hover:text-blue-600'
+                                            }`}>{action.label}</span>
                                         </button>
                                     ))}
                                 </div>
@@ -254,7 +268,7 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Security Code</p>
                                             <p className="text-sm font-mono font-bold tracking-[0.2em] text-slate-800 `wrap-break-words`">{securityCode}</p>
                                         </div>
-                                    )}Your secure session for this group needs repair. We've automatically requested a new key from other members. Please try sending your message again in a few seconds.
+                                    )}
                                     {securityMessage && (
                                         <p className={`text-[10px] font-medium leading-relaxed ${securityCode ? 'text-slate-400' : 'text-amber-600'}`}>
                                             {securityMessage}

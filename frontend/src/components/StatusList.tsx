@@ -17,32 +17,43 @@ export const StatusList: React.FC<StatusListProps> = ({ user, onAdd, onView, ref
 
     useEffect(() => {
         fetchStatuses();
-    }, [refreshTrigger]);
+    }, [refreshTrigger, user?.$id]);
 
     const fetchStatuses = async () => {
+        if (!user?.$id) {
+            setMyStatuses([]);
+            setFriendStatuses([]);
+            setIsLoading(false);
+            return;
+        }
+
         setIsLoading(true);
         try {
             const now = new Date().toISOString();
+            const myDisplayName = user?.username || user?.name || 'You';
             
             // 1. Fetch my statuses
             const myRes = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "statuses", [
-                Query.equal("user_id", user?.$id),
+                Query.equal("user_id", user.$id),
                 Query.greaterThan("expires_at", now),
                 Query.orderDesc("created_at")
             ]);
-            setMyStatuses(myRes.documents);
+            setMyStatuses(myRes.documents.map(status => ({
+                ...status,
+                userName: status.userName || myDisplayName
+            })));
 
             // 2. Fetch friend statuses
             // For now, fetch all active statuses not from me and not excluding me
             const friendRes = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "statuses", [
-                Query.notEqual("user_id", user?.$id),
+                Query.notEqual("user_id", user.$id),
                 Query.greaterThan("expires_at", now),
                 Query.orderDesc("created_at")
             ]);
 
             // Filter out statuses that exclude me (frontend filtering for now)
             const visibleStatuses = friendRes.documents.filter(s => 
-                !s.excluded_users?.includes(user?.$id)
+                !s.excluded_users?.includes(user.$id)
             );
 
             // Group by user
@@ -80,18 +91,28 @@ export const StatusList: React.FC<StatusListProps> = ({ user, onAdd, onView, ref
             {/* My Status Section */}
             <section className="space-y-4">
                 <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-2">My Channel</h4>
-                <div onClick={onAdd} className="bg-white border border-slate-200 rounded-4xl p-5 flex items-center gap-4 hover:shadow-lg transition-all cursor-pointer group active:scale-95 shadow-sm">
+                <div
+                    onClick={() => (myStatuses.length > 0 ? onView(myStatuses, 0) : onAdd())}
+                    className="bg-white border border-slate-200 rounded-4xl p-5 flex items-center gap-4 hover:shadow-lg transition-all cursor-pointer group active:scale-95 shadow-sm"
+                >
                     <div className="relative">
                         <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-lg border-2 ${myStatuses.length > 0 ? 'border-blue-500' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
                             {myStatuses.length > 0 ? (
                                 myStatuses[0].type === 'text' ? (
                                     <div className="w-full h-full rounded-xl flex items-center justify-center text-xs" style={{ backgroundColor: myStatuses[0].background_color }}>Story</div>
                                 ) : <div className="w-full h-full rounded-xl bg-slate-200" />
-                            ) : (user?.username?.[0] || 'U')}
+                            ) : (user?.username?.[0] || user?.name?.[0] || 'U')}
                         </div>
-                        <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-600 rounded-lg flex items-center justify-center border-2 border-white shadow-md text-white group-hover:scale-110 transition-transform">
+                        <button
+                            type="button"
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                onAdd();
+                            }}
+                            className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-600 rounded-lg flex items-center justify-center border-2 border-white shadow-md text-white group-hover:scale-110 transition-transform"
+                        >
                             <Plus className="w-4 h-4" />
-                        </div>
+                        </button>
                     </div>
                     <div className="flex-1">
                         <h5 className="text-sm font-black text-slate-800">Post Intelligence</h5>

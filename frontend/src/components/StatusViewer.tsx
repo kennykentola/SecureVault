@@ -33,11 +33,11 @@ export const StatusViewer: React.FC<StatusViewerProps> = ({
     const DURATION = 5000; // 5 seconds per status
 
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && statuses[initialIndex]) {
             setCurrentIndex(initialIndex);
             loadStatus(statuses[initialIndex]);
         }
-    }, [isOpen]);
+    }, [isOpen, initialIndex, statuses]);
 
     useEffect(() => {
         if (!isPaused && isOpen) {
@@ -220,6 +220,7 @@ export const StatusViewer: React.FC<StatusViewerProps> = ({
     if (!isOpen) return null;
 
     const currentStatus = statuses[currentIndex];
+    const isOwner = currentStatus?.user_id === user.$id || currentStatus?.poster_id === user.$id;
 
     return (
         <AnimatePresence>
@@ -257,7 +258,7 @@ export const StatusViewer: React.FC<StatusViewerProps> = ({
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        {currentStatus.user_id === user.$id && (
+                        {isOwner && (
                             <button 
                                 onClick={handleDeleteStatus}
                                 className="p-2 hover:bg-red-500/20 rounded-full text-red-400 transition-colors"
