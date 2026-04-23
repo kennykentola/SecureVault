@@ -184,7 +184,7 @@ export const HybridEncryptor = {
         return { blob: new Blob([encrypted]), iv: btoa(String.fromCharCode(...iv)) };
     },
 
-    decryptFile: async (fileBlob: Blob, aesKey: CryptoKey, ivB64: string) => {
+    decryptFile: async (fileBlob: Blob, aesKey: CryptoKey, ivB64: string, mimeType?: string) => {
         const arrayBuffer = await fileBlob.arrayBuffer();
         const iv = new Uint8Array(atob(ivB64).split('').map(c => c.charCodeAt(0)));
         const decrypted = await window.crypto.subtle.decrypt(
@@ -192,7 +192,6 @@ export const HybridEncryptor = {
             aesKey,
             arrayBuffer
         );
-        return new Blob([decrypted]);
+        return new Blob([decrypted], mimeType ? { type: mimeType } : undefined);
     }
 };
-

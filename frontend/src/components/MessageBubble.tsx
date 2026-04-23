@@ -43,6 +43,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     const durationLabel = msg.duration || msg.mediaData?.duration;
     const rawKeyBase64 = msg.decryptedKeyBase64 || msg.mediaData?.decryptedKeyBase64;
     const localFile = msg.localFile instanceof File ? msg.localFile : null;
+    const originalMimeType = msg.originalMimeType || msg.original_mime_type || msg.mediaData?.originalMimeType || msg.mediaData?.original_mime_type || localFile?.type;
 
     // Close menu when clicking away
     React.useEffect(() => {
@@ -153,7 +154,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             );
 
             // 3. Decrypt the blob
-            const decryptedBlob = await HybridEncryptor.decryptFile(fileBlob, aesKey, iv);
+            const decryptedBlob = await HybridEncryptor.decryptFile(fileBlob, aesKey, iv, originalMimeType);
             const url = URL.createObjectURL(decryptedBlob);
             setDecryptedUrl(url);
 

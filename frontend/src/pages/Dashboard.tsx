@@ -88,11 +88,12 @@ export const Dashboard: React.FC = () => {
     const [selectedStatuses, setSelectedStatuses] = useState<any[]>([]);
     const [statusIndex, setStatusIndex] = useState(0);
     const [refreshStatusTrigger, setRefreshStatusTrigger] = useState(0);
+    const pendingStatusViewUpdatesRef = useRef<Set<string>>(new Set());
 
     const [replyTo, setReplyTo] = useState<any>(null);
     const [editingMessage, setEditingMessage] = useState<any>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const { isRecording, audioBlob, recordingDuration, startRecording, stopRecording, setAudioBlob } = useAudioRecorder();
+    const { isRecording, audioBlob, audioMimeType, recordingDuration, startRecording, stopRecording, setAudioBlob } = useAudioRecorder();
     const [isVoiceUploading, setIsVoiceUploading] = useState(false);
 
     const getDirectChatUserId = (chat: any) => chat?.user_id || null;
@@ -169,13 +170,71 @@ export const Dashboard: React.FC = () => {
         const secs = seconds % 60;
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
-    const getEncryptedUploadName = (originalName: string, type: 'voice' | 'file') => {
+    const getFileExtension = (fileName: string, mimeType?: string) => {
+        const nameExtension = fileName.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
+        if (nameExtension) return nameExtension;
+
+        const mimeExtension = mimeType?.split('/')[1]?.split(';')[0]?.trim().toLowerCase();
+        if (!mimeExtension) return '';
+        if (mimeExtension === 'mpeg') return 'mp3';
+        if (mimeExtension === 'quicktime') return 'mov';
+        return mimeExtension.replace(/[^a-z0-9]+/g, '');
+    };
+    const getEncryptedUploadName = (originalName: string, type: 'voice' | 'file', mimeType?: string) => {
         const safeBaseName = originalName
             .replace(/\.[^/.]+$/, '')
             .replace(/[^a-zA-Z0-9-_]+/g, '-')
             .replace(/^-+|-+$/g, '')
             .slice(0, 40) || (type === 'voice' ? 'voice-note' : 'attachment');
-        return `${safeBaseName}-encrypted`;
+        const safeExtension = getFileExtension(originalName, mimeType) || (type === 'voice' ? 'webm' : 'bin');
+        return `${safeBaseName}-encrypted.${safeExtension}`;
+    };
+    const getVoiceNoteFileName = (mimeType?: string) => {
+        const extension = getFileExtension('voice-note', mimeType) || 'webm';
+        return `voice-note.${extension}`;
+    };
+    const getAppwriteErrorMeta = (error: unknown) => {
+        if (!error || typeof error !== 'object') {
+            return { code: undefined as number | undefined, type: undefined as string | undefined, message: '' };
+        }
+
+        const appwriteError = error as {
+            code?: number;
+            type?: string;
+            message?: string;
+            response?: { code?: number; type?: string; message?: string };
+        };
+
+        return {
+            code: appwriteError.response?.code ?? appwriteError.code,
+            type: appwriteError.response?.type ?? appwriteError.type,
+            message: appwriteError.response?.message ?? appwriteError.message ?? ''
+        };
+    };
+    const getMediaUploadErrorMessage = (error: unknown, type: 'voice' | 'file') => {
+        const { type: errorType, message } = getAppwriteErrorMeta(error);
+
+        if (errorType === 'storage_file_empty') {
+            return type === 'voice'
+                ? "That voice note was empty. Record a little longer and try again."
+                : "That file is empty and could not be uploaded.";
+        }
+
+        if (errorType === 'storage_file_type_unsupported') {
+            return type === 'voice'
+                ? "Appwrite rejected the encrypted voice note format. Allow the voice-note extension in your storage bucket, or leave allowed file extensions blank."
+                : "Appwrite rejected this file type. Check your storage bucket's allowed file extensions.";
+        }
+
+        if (errorType === 'storage_invalid_file_size') {
+            return "Appwrite rejected the upload because the file is too large for this storage bucket.";
+        }
+
+        if (message) {
+            return `Failed to send media: ${message}`;
+        }
+
+        return "Failed to send media. Ensure your secure connection is active.";
     };
     const toggleSelectedChatMute = React.useCallback(() => {
         if (!selectedChat) return;
@@ -247,10 +306,21 @@ export const Dashboard: React.FC = () => {
 
     useEffect(() => {
         if (audioBlob) {
-            handleMediaUpload(new File([audioBlob], "voice.webm", { type: 'audio/webm' }), 'voice', recordingDuration);
+            const resolvedAudioMimeType = audioBlob.type || audioMimeType || 'audio/webm';
+            handleMediaUpload(
+                new File([audioBlob], getVoiceNoteFileName(resolvedAudioMimeType), { type: resolvedAudioMimeType }),
+                'voice',
+                recordingDuration
+            );
             setAudioBlob(null);
         }
-    }, [audioBlob]);
+    }, [audioBlob, audioMimeType, recordingDuration]);
+
+    useEffect(() => {
+        if (!showStatusViewer) {
+            pendingStatusViewUpdatesRef.current.clear();
+        }
+    }, [showStatusViewer]);
 
     useEffect(() => {
         let cancelled = false;
@@ -1143,6 +1213,41 @@ export const Dashboard: React.FC = () => {
         console.log("Forwarding message:", msg.text);
     };
 
+    const handleStatusViewed = React.useCallback((statusId: string) => {
+        const viewerId = user?.$id;
+        if (!viewerId) return;
+
+        const status = selectedStatuses.find(item => item.$id === statusId);
+        if (!status) return;
+
+        if (status.user_id === viewerId || status.poster_id === viewerId) {
+            return;
+        }
+
+        const existingViewers = Array.isArray(status.viewers) ? status.viewers : [];
+        if (existingViewers.includes(viewerId) || pendingStatusViewUpdatesRef.current.has(statusId)) {
+            return;
+        }
+
+        const nextViewers = Array.from(new Set([...existingViewers, viewerId]));
+        pendingStatusViewUpdatesRef.current.add(statusId);
+
+        setSelectedStatuses(prev => prev.map(item => (
+            item.$id === statusId ? { ...item, viewers: nextViewers } : item
+        )));
+
+        databases.updateDocument(APPWRITE_CONFIG.DATABASE_ID, "statuses", statusId, {
+            viewers: nextViewers
+        }).catch((error: any) => {
+            const statusCode = error?.code ?? error?.response?.code;
+            if (statusCode !== 429) {
+                console.error("Status view update failed", error);
+            }
+        }).finally(() => {
+            pendingStatusViewUpdatesRef.current.delete(statusId);
+        });
+    }, [selectedStatuses, user?.$id]);
+
     const handleMediaUpload = async (file: File, type: 'voice' | 'file', duration?: number) => {
         console.log(`Attempting ${type} upload. Keys Unlocked:`, !!privateKey);
         if (!selectedChat) return;
@@ -1154,6 +1259,12 @@ export const Dashboard: React.FC = () => {
         const chatTargetId = getChatTargetId(selectedChat);
         if (!chatTargetId) {
             alert("This contact is missing a valid account id. Ask them to sign in again so their profile can sync.");
+            return;
+        }
+        if (!file.size) {
+            alert(type === 'voice'
+                ? "That voice note was empty. Record a little longer and try again."
+                : "That file is empty and could not be uploaded.");
             return;
         }
         setIsVoiceUploading(true);
@@ -1174,7 +1285,9 @@ export const Dashboard: React.FC = () => {
             const uploadedFile = await storage.createFile(
                 APPWRITE_CONFIG.BUCKET_ID,
                 ID.unique(),
-                new File([blob], getEncryptedUploadName(file.name, type), { type: 'application/octet-stream' })
+                new File([blob], getEncryptedUploadName(file.name, type, file.type), {
+                    type: file.type || 'application/octet-stream'
+                })
             );
 
             // 4. Wrap the file key with recipient's public key (or group key)
@@ -1245,7 +1358,7 @@ export const Dashboard: React.FC = () => {
 
         } catch (e) {
             console.error("Media upload failed", e);
-            alert("Failed to send media. Ensure your secure connection is active.");
+            alert(getMediaUploadErrorMessage(e, type));
         } finally {
             setIsVoiceUploading(false);
         }
@@ -2234,19 +2347,7 @@ const isLink = searchText.includes("http");
                 statuses={selectedStatuses} 
                 initialIndex={statusIndex} 
                 user={user} 
-                onViewed={(id) => {
-                    // Update viewers in background
-                    const nextViewers = Array.from(new Set([
-                        ...(selectedStatuses.find(s => s.$id === id)?.viewers || []),
-                        user?.$id
-                    ].filter(Boolean)));
-                    setSelectedStatuses(prev => prev.map(status => (
-                        status.$id === id ? { ...status, viewers: nextViewers } : status
-                    )));
-                    databases.updateDocument(APPWRITE_CONFIG.DATABASE_ID, "statuses", id, {
-                        viewers: nextViewers
-                    }).catch(console.error);
-                }} 
+                onViewed={handleStatusViewed} 
                 onDeleted={() => setRefreshStatusTrigger(prev => prev + 1)}
             />
 

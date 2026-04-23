@@ -356,13 +356,22 @@
   background-color: var(--accent) !important;
 }
 
-/* Input fields */
-input, textarea {
+/* Input fields — exclude transparent ones (e.g. status wizard textarea) */
+input:not(.bg-transparent), textarea:not(.bg-transparent) {
   background-color: var(--bg-primary) !important;
   color: var(--text-primary) !important;
 }
-input::placeholder, textarea::placeholder {
+input:not(.bg-transparent)::placeholder, textarea:not(.bg-transparent)::placeholder {
   color: var(--text-muted) !important;
+}
+
+/* Status wizard textarea: keep white text on colored background */
+textarea.bg-transparent {
+  background-color: transparent !important;
+  color: #ffffff !important;
+}
+textarea.bg-transparent::placeholder {
+  color: rgba(255, 255, 255, 0.5) !important;
 }
 
 /* Chat area background */

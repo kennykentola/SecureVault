@@ -27,29 +27,44 @@ export const StatusViewer: React.FC<StatusViewerProps> = ({
     const [isLoading, setIsLoading] = useState(false);
     const { privateKey, legacyPrivateKeys } = useAuth();
     const progressRef = useRef<number>(0);
-    const timerRef = useRef<any>(null);
+    const timerRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
     const availablePrivateKeys = [privateKey, ...legacyPrivateKeys].filter((key): key is CryptoKey => !!key);
 
     const DURATION = 5000; // 5 seconds per status
+    const activeStatusId = statuses[currentIndex]?.$id;
+
+    const clearTimer = () => {
+        if (timerRef.current) {
+            window.clearInterval(timerRef.current);
+            timerRef.current = null;
+        }
+    };
 
     useEffect(() => {
         if (isOpen && statuses[initialIndex]) {
             setCurrentIndex(initialIndex);
-            loadStatus(statuses[initialIndex]);
+        } else if (!isOpen) {
+            clearTimer();
         }
-    }, [isOpen, initialIndex, statuses]);
+    }, [isOpen, initialIndex]);
+
+    useEffect(() => {
+        if (isOpen && statuses[currentIndex]) {
+            loadStatus(statuses[currentIndex]);
+        }
+    }, [isOpen, currentIndex, activeStatusId]);
 
     useEffect(() => {
         if (!isPaused && isOpen) {
             startTimer();
         } else {
-            clearInterval(timerRef.current);
+            clearTimer();
         }
-        return () => clearInterval(timerRef.current);
+        return () => clearTimer();
     }, [currentIndex, isPaused, isOpen]);
 
     const startTimer = () => {
-        clearInterval(timerRef.current);
+        clearTimer();
         setProgress(0);
         progressRef.current = 0;
         
@@ -201,9 +216,7 @@ export const StatusViewer: React.FC<StatusViewerProps> = ({
 
     const handleNext = () => {
         if (currentIndex < statuses.length - 1) {
-            const next = currentIndex + 1;
-            setCurrentIndex(next);
-            loadStatus(statuses[next]);
+            setCurrentIndex(prev => prev + 1);
         } else {
             onClose();
         }
@@ -211,9 +224,7 @@ export const StatusViewer: React.FC<StatusViewerProps> = ({
 
     const handlePrev = () => {
         if (currentIndex > 0) {
-            const prev = currentIndex - 1;
-            setCurrentIndex(prev);
-            loadStatus(statuses[prev]);
+            setCurrentIndex(prev => prev - 1);
         }
     };
 

@@ -3,30 +3,80 @@ import { useState, useRef, useCallback } from 'react';
 export const useAudioRecorder = () => {
     const [isRecording, setIsRecording] = useState(false);
     const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+    const [audioMimeType, setAudioMimeType] = useState('audio/webm');
     const [recordingDuration, setRecordingDuration] = useState(0);
-    const timerRef = useRef<any>(null);
+    const timerRef = useRef<ReturnType<typeof window.setInterval> | null>(null);
     const mediaRecorder = useRef<MediaRecorder | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
     const chunks = useRef<Blob[]>([]);
+    const discardRecordingRef = useRef(false);
+
+    const clearTimer = () => {
+        if (timerRef.current) {
+            window.clearInterval(timerRef.current);
+            timerRef.current = null;
+        }
+    };
+
+    const stopStream = () => {
+        streamRef.current?.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+    };
+
+    const getSupportedMimeType = () => {
+        if (typeof MediaRecorder === 'undefined') return '';
+
+        const preferredMimeTypes = [
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/ogg;codecs=opus',
+            'audio/ogg',
+            'audio/mp4'
+        ];
+
+        return preferredMimeTypes.find(mimeType => MediaRecorder.isTypeSupported(mimeType)) || '';
+    };
 
     const startRecording = useCallback(async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder.current = new MediaRecorder(stream);
+            streamRef.current = stream;
+            discardRecordingRef.current = false;
+
+            const supportedMimeType = getSupportedMimeType();
+            mediaRecorder.current = supportedMimeType
+                ? new MediaRecorder(stream, { mimeType: supportedMimeType })
+                : new MediaRecorder(stream);
             chunks.current = [];
             setRecordingDuration(0);
+            setAudioBlob(null);
+            setAudioMimeType(mediaRecorder.current.mimeType || supportedMimeType || 'audio/webm');
 
             mediaRecorder.current.ondataavailable = (e) => {
                 if (e.data.size > 0) chunks.current.push(e.data);
             };
 
             mediaRecorder.current.onstop = () => {
-                const blob = new Blob(chunks.current, { type: 'audio/webm' });
-                setAudioBlob(blob);
-                stream.getTracks().forEach(track => track.stop());
-                clearInterval(timerRef.current);
+                const resolvedMimeType = mediaRecorder.current?.mimeType || supportedMimeType || 'audio/webm';
+                const blob = new Blob(chunks.current, { type: resolvedMimeType });
+
+                if (discardRecordingRef.current) {
+                    discardRecordingRef.current = false;
+                    setAudioBlob(null);
+                } else if (blob.size > 0) {
+                    setAudioMimeType(resolvedMimeType);
+                    setAudioBlob(blob);
+                } else {
+                    setAudioBlob(null);
+                    alert("Voice note was empty. Record a little longer and try again.");
+                }
+
+                chunks.current = [];
+                stopStream();
+                clearTimer();
             };
 
-            mediaRecorder.current.start();
+            mediaRecorder.current.start(250);
             setIsRecording(true);
 
             timerRef.current = setInterval(() => {
@@ -35,6 +85,8 @@ export const useAudioRecorder = () => {
 
         } catch (e) {
             console.error("Audio recording failed:", e);
+            stopStream();
+            clearTimer();
             alert("Microphone access denied or not available.");
         }
     }, []);
@@ -49,14 +101,15 @@ export const useAudioRecorder = () => {
 
     const cancelRecording = useCallback(() => {
         if (mediaRecorder.current && isRecording) {
+            discardRecordingRef.current = true;
             mediaRecorder.current.stop();
             setIsRecording(false);
             setAudioBlob(null);
             chunks.current = [];
             setRecordingDuration(0);
-            clearInterval(timerRef.current);
+            clearTimer();
         }
     }, [isRecording]);
 
-    return { isRecording, audioBlob, recordingDuration, startRecording, stopRecording, cancelRecording, setAudioBlob };
+    return { isRecording, audioBlob, audioMimeType, recordingDuration, startRecording, stopRecording, cancelRecording, setAudioBlob };
 };
