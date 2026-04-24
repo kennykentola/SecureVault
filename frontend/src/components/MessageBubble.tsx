@@ -251,6 +251,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                                         ref={audioRef} 
                                         src={decryptedUrl} 
                                         onEnded={() => setIsPlaying(false)}
+                                        playsInline
+                                        preload="auto"
                                         className="hidden"
                                     />
                                 )}

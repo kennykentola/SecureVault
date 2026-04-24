@@ -27,12 +27,13 @@ export const useAudioRecorder = () => {
     const getSupportedMimeType = () => {
         if (typeof MediaRecorder === 'undefined') return '';
 
+        // Prefer MP4/AAC for better iOS compatibility, fall back to WebM/OGG
         const preferredMimeTypes = [
+            'audio/mp4',
             'audio/webm;codecs=opus',
             'audio/webm',
             'audio/ogg;codecs=opus',
-            'audio/ogg',
-            'audio/mp4'
+            'audio/ogg'
         ];
 
         return preferredMimeTypes.find(mimeType => MediaRecorder.isTypeSupported(mimeType)) || '';

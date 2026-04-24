@@ -684,8 +684,12 @@ export const Dashboard: React.FC = () => {
                 decrypted = "[Vault Locked]";
             } else {
                 const isMedia = msg.payload.type === 'voice' || msg.payload.type === 'file';
+                const isGif = msg.payload.gif_url && !isMedia;
 
-            if (msg.is_group || (selectedChat?.type === 'group' && msg.recipient_id === selectedChat.$id)) {
+            if (isGif) {
+                // GIF messages don't need decryption
+                decrypted = null;
+            } else if (msg.is_group || (selectedChat?.type === 'group' && msg.recipient_id === selectedChat.$id)) {
                 const group = groups.find(g => g.$id === msg.recipient_id || g.$id === selectedChat?.$id);
                 if (!group) return; 
                 
@@ -756,9 +760,10 @@ export const Dashboard: React.FC = () => {
             const newMsg = { 
                 ...msg.payload, 
                 type: msg.payload.type || 'text',
-                text: decrypted || (msg.payload.type === 'voice' ? 'Voice message' : `File: ${msg.payload.fileName}`), 
+                text: msg.payload.gif_url ? '' : (decrypted || (msg.payload.type === 'voice' ? 'Voice message' : `File: ${msg.payload.fileName}`)), 
                 sender_id: msg.sender_id, 
                 $id: msg.$id,
+                gif_url: msg.payload.gif_url || null,
                 mediaData,
                 // Preserve cryptographic metadata for visualization
                 ciphertext: msg.payload.ciphertext,
@@ -1443,9 +1448,16 @@ export const Dashboard: React.FC = () => {
                     let text: string | null = null;
                     let mediaData: any = null;
                     let resolvedPayload: any = {};
-                    const isMedia = m.type === 'voice' || m.type === 'file';
+                    const msgPayloadRaw = (typeof m.payload === 'string') ? JSON.parse(m.payload) : (m.payload || m);
+                    const resolvedPayload = typeof msgPayloadRaw === 'object' && msgPayloadRaw ? msgPayloadRaw : {};
+                    const isMedia = m.type === 'voice' || m.type === 'file' || resolvedPayload.gif_url;
+                    const isGif = resolvedPayload.gif_url && !isMedia;
 
-                    if (!availablePrivateKeys.length && !isGroup) {
+                    if (isGif) {
+                        // GIF messages don't need decryption - just pass through
+                        text = null;
+                        resolvedPayload.text = '';
+                    } else if (!availablePrivateKeys.length && !isGroup) {
                         text = "[Vault Locked]";
                     } else if (isGroup) {
                         try {
@@ -1469,6 +1481,48 @@ export const Dashboard: React.FC = () => {
                                             if (typeof parsedOnce === 'string' && (parsedOnce.startsWith('{') || parsedOnce.startsWith('['))) {
                                                 keys = JSON.parse(parsedOnce);
                                             } else {
+                                                keys = parsedOnce;
+                                            }
+                                        }
+                                    }
+                                } catch (e) {}
+                                
+                                if (isMedia) {
+                                    const mediaKeySource = (typeof keys === 'object') ? (keys.encryptedKey || keys.encrypted_key) : keys;
+                                    const decryptedKeyBase64 = await HybridEncryptor.decryptSymmetric({ ...(msgPayloadRaw.encryptedKey || {}), ciphertext: mediaKeySource }, groupKey);
+                                    mediaData = { ...m, ...msgPayloadRaw, decryptedKeyBase64 };
+                                } else {
+                                    text = await HybridEncryptor.decryptSymmetric(msgPayloadRaw, groupKey);
+                                }
+                            }
+                        } catch (err: any) {
+                            const isMismatch = err.name === "OperationError" || err.message === 'IDENTITY_MISMATCH';
+                            
+                            // Signal Session Repair for historical group message
+                            if (isMismatch) {
+                                requestGroupKeySync(m.receiver_id);
+                            }
+
+                            return { 
+                                ...m, 
+                                is_waiting: isMismatch,
+                                text: isMismatch ? GROUP_WAITING_TEXT : "[Encrypted Group Message]" 
+                            };
+                        }
+                    } else {
+                        try {
+                            let keys = m.encrypted_key || m.encryptedKey;
+                            if (typeof keys === 'string') {
+                                try {
+                                    const clean = keys.trim();
+                                    if (clean.startsWith('{') || clean.startsWith('[')) {
+                                        keys = JSON.parse(clean);
+                                    } else if (clean.startsWith('"')) {
+                                        // Handle double-stringified values from backend
+                                        const parsedOnce = JSON.parse(clean);
+                                        if (typeof parsedOnce === 'string' && (parsedOnce.startsWith('{') || parsedOnce.startsWith('['))) {
+                                            keys = JSON.parse(parsedOnce);
+                                        } else {
                                                 keys = parsedOnce;
                                             }
                                         }
@@ -1563,7 +1617,8 @@ export const Dashboard: React.FC = () => {
                     return { 
                         ...m, 
                         ...resolvedPayload,
-                        text: text || ((resolvedPayload.type || m.type) === 'voice' ? 'Voice message' : `File: ${resolvedPayload.fileName || m.fileName || m.filename || 'Attachment'}`),
+                        text: isGif ? '' : (text || ((resolvedPayload.type || m.type) === 'voice' ? 'Voice message' : `File: ${resolvedPayload.fileName || m.fileName || m.filename || 'Attachment'}`)),
+                        gif_url: resolvedPayload.gif_url || null,
                         mediaData,
                         latency: HybridEncryptor.metrics.lastDecryptionTime
                     };
