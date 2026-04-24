@@ -181,14 +181,22 @@ export const Dashboard: React.FC = () => {
         return mimeExtension.replace(/[^a-z0-9]+/g, '');
     };
     const getEncryptedUploadName = (originalName: string, type: 'voice' | 'file', _mimeType?: string) => {
-        // Encrypted blobs are raw AES-GCM binary — always use .enc so Appwrite never rejects the extension.
-        // The real MIME type is preserved in the message payload (originalMimeType field).
+        // Encrypted blobs are raw AES-GCM binary. 
+        // For voice notes, we use .voice-note to match the storage bucket instructions.
+        // For other files, we preserve the original extension so that the bucket's 
+        // allowed extension list (e.g. .pdf, .jpg) doesn't block the encrypted upload.
+        const extension = originalName.split('.').pop()?.toLowerCase() || 'bin';
         const safeBaseName = originalName
             .replace(/\.[^/.]+$/, '')
             .replace(/[^a-zA-Z0-9-_]+/g, '-')
             .replace(/^-+|-+$/g, '')
             .slice(0, 40) || (type === 'voice' ? 'voice-note' : 'attachment');
-        return `${safeBaseName}-encrypted.enc`;
+        
+        if (type === 'voice') {
+            return `${safeBaseName}.voice-note`;
+        }
+        
+        return `${safeBaseName}.${extension}`;
     };
     const getVoiceNoteFileName = (mimeType?: string) => {
         const extension = getFileExtension('voice-note', mimeType) || 'webm';
@@ -224,7 +232,7 @@ export const Dashboard: React.FC = () => {
         if (errorType === 'storage_file_type_unsupported') {
             return type === 'voice'
                 ? "Appwrite rejected the encrypted voice note format. Allow the voice-note extension in your storage bucket, or leave allowed file extensions blank."
-                : "Appwrite rejected this file type. Check your storage bucket's allowed file extensions.";
+                : "Appwrite rejected this file type. Check your storage bucket's allowed file extensions. You may need to allow the original extension of the file you are sending.";
         }
 
         if (errorType === 'storage_invalid_file_size') {
@@ -684,8 +692,12 @@ export const Dashboard: React.FC = () => {
                 decrypted = "[Vault Locked]";
             } else {
                 const isMedia = msg.payload.type === 'voice' || msg.payload.type === 'file';
+                const isGif = msg.payload.gif_url && !isMedia;
 
-            if (msg.is_group || (selectedChat?.type === 'group' && msg.recipient_id === selectedChat.$id)) {
+            if (isGif) {
+                // GIF messages don't need decryption
+                decrypted = null;
+            } else if (msg.is_group || (selectedChat?.type === 'group' && msg.recipient_id === selectedChat.$id)) {
                 const group = groups.find(g => g.$id === msg.recipient_id || g.$id === selectedChat?.$id);
                 if (!group) return; 
                 
@@ -756,9 +768,10 @@ export const Dashboard: React.FC = () => {
             const newMsg = { 
                 ...msg.payload, 
                 type: msg.payload.type || 'text',
-                text: decrypted || (msg.payload.type === 'voice' ? 'Voice message' : `File: ${msg.payload.fileName}`), 
+                text: msg.payload.gif_url ? '' : (decrypted || (msg.payload.type === 'voice' ? 'Voice message' : `File: ${msg.payload.fileName}`)), 
                 sender_id: msg.sender_id, 
                 $id: msg.$id,
+                gif_url: msg.payload.gif_url || null,
                 mediaData,
                 // Preserve cryptographic metadata for visualization
                 ciphertext: msg.payload.ciphertext,

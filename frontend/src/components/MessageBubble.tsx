@@ -84,10 +84,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
     const playAudio = React.useCallback(async () => {
         const audioEl = audioRef.current;
-        if (!audioEl) return false;
+        if (!audioEl || !audioEl.src) return false;
 
         try {
-            await audioEl.play();
+            const playPromise = audioEl.play();
+            if (playPromise !== undefined) {
+                await playPromise;
+            }
             setIsPlaying(true);
             return true;
         } catch (error: any) {
@@ -122,7 +125,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             setDecryptedUrl(localUrl);
             if (mediaType === 'voice') {
                 setTimeout(() => {
-                    void playAudio();
+                    playAudio().catch(() => {});
                 }, 100);
             } else {
                 const link = document.createElement('a');
@@ -160,7 +163,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
             if (mediaType === 'voice') {
                 setTimeout(() => {
-                    void playAudio();
+                    playAudio().catch(() => {});
                 }, 100);
             }
         } catch (e) {
