@@ -2,14 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, Zap, Globe, Activity, Eye } from 'lucide-react';
 
+import { useAuth } from '../context/AuthContext';
+import { KeyManager } from '../crypto/keyManager';
+import { databases, APPWRITE_CONFIG } from '../lib/appwrite';
+import { Query } from 'appwrite';
+
 interface SecurityDashboardProps {
     messages: any[];
 }
 
 export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ messages }) => {
+    const { user, privateKey } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<'metrics' | 'mitm' | 'protocol'>('metrics');
+    const [activeTab, setActiveTab] = useState<'metrics' | 'mitm' | 'protocol' | 'recovery'>('metrics');
     const [networkLatency, setNetworkLatency] = useState<number>(0);
+    const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
+    const [isGenerating, setIsGenerating] = useState(false);
 
     useEffect(() => {
         // Simulate network latency fluctuations
@@ -67,6 +75,12 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ messages }
                                     className={`px-2 py-1 text-[8px] font-bold rounded-md transition-colors ${activeTab === 'mitm' ? 'bg-red-600 text-white' : 'text-white bg-white/10 hover:bg-white/20'}`}
                                 >
                                     MITM
+                                </button>
+                                <button 
+                                    onClick={() => setActiveTab('recovery')}
+                                    className={`px-2 py-1 text-[8px] font-bold rounded-md transition-colors ${activeTab === 'recovery' ? 'bg-yellow-600 text-white' : 'text-white bg-white/10 hover:bg-white/20'}`}
+                                >
+                                    Recovery
                                 </button>
                             </div>
                         </div>
@@ -138,7 +152,7 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ messages }
                                         </p>
                                     </div>
                                 </div>
-                            ) : (
+                            ) : activeTab === 'mitm' ? (
                                 <div className="space-y-4">
                                     <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-2xl">
                                         <Eye className="w-4 h-4 text-red-500 shrink-0" />
@@ -176,6 +190,70 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ messages }
                                         </div>
                                         <span className="text-[10px] font-black uppercase tracking-widest text-red-500/70">Monitoring Active</span>
                                     </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl">
+                                        <Shield className="w-4 h-4 text-yellow-500 shrink-0" />
+                                        <p className="text-[10px] leading-tight text-yellow-200">
+                                            Manage your End-to-End Encryption Recovery Key.
+                                        </p>
+                                    </div>
+
+                                    {!privateKey ? (
+                                        <div className="p-4 text-center border border-slate-800 rounded-xl bg-slate-900/50">
+                                            <p className="text-[10px] text-slate-400">You must unlock your vault first to manage recovery keys.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4 text-center">
+                                            {recoveryKey ? (
+                                                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                                                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500 mb-2">Your New Recovery Key</p>
+                                                    <code className="text-sm font-mono font-bold text-green-400 break-all">{recoveryKey}</code>
+                                                    <p className="text-[9px] text-slate-500 mt-2">Please save this in a password manager or write it down. It will only be shown once.</p>
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={async () => {
+                                                        try {
+                                                            setIsGenerating(true);
+                                                            const newKey = KeyManager.generateRecoveryKey();
+                                                            const publicKeyStr = await KeyManager.getPublicKey();
+                                                            if (!publicKeyStr) throw new Error("Public key not found");
+
+                                                            const recoveryBackup = await KeyManager.createRecoveryVaultBackupRecord(privateKey, newKey, publicKeyStr);
+                                                            
+                                                            const res = await databases.listDocuments(
+                                                                APPWRITE_CONFIG.DATABASE_ID,
+                                                                APPWRITE_CONFIG.COLLECTION_USERS,
+                                                                [Query.equal("user_id", user?.$id)]
+                                                            );
+                                                            
+                                                            if (res.total > 0) {
+                                                                await databases.updateDocument(
+                                                                    APPWRITE_CONFIG.DATABASE_ID,
+                                                                    APPWRITE_CONFIG.COLLECTION_USERS,
+                                                                    res.documents[0].$id,
+                                                                    { recovery_vault_backup: JSON.stringify(recoveryBackup) }
+                                                                );
+                                                                setRecoveryKey(newKey);
+                                                            } else {
+                                                                throw new Error("User profile not found");
+                                                            }
+                                                        } catch (e: any) {
+                                                            alert("Failed to generate recovery key: " + e.message);
+                                                        } finally {
+                                                            setIsGenerating(false);
+                                                        }
+                                                    }}
+                                                    disabled={isGenerating}
+                                                    className="w-full py-3 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-500 border border-yellow-500/50 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                                                >
+                                                    {isGenerating ? 'Generating...' : 'Regenerate Recovery Key'}
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>

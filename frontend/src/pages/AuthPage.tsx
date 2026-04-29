@@ -61,6 +61,14 @@ export const AuthPage: React.FC = () => {
                 const vaultBackup = JSON.stringify(
                     await KeyManager.createVaultBackupRecord(keys.privateKey, publicKeyStr, pin)
                 );
+                
+                const generatedRecoveryKey = KeyManager.generateRecoveryKey();
+                const recoveryVaultBackup = JSON.stringify(
+                    await KeyManager.createRecoveryVaultBackupRecord(keys.privateKey, generatedRecoveryKey, publicKeyStr)
+                );
+
+                sessionStorage.setItem('new_recovery_key', generatedRecoveryKey);
+
                 const profilePayload = {
                     user_id: activeId,
                     username: username,
@@ -68,6 +76,7 @@ export const AuthPage: React.FC = () => {
                     phone: phone,
                     public_key: publicKeyStr,
                     vault_backup: vaultBackup,
+                    recovery_vault_backup: recoveryVaultBackup,
                     legacy_vault_backups: "[]",
                     role: 'user',
                     status: 'active'
@@ -126,12 +135,13 @@ export const AuthPage: React.FC = () => {
                                 { 
                                     public_key: publicKeyStr,
                                     vault_backup: vaultBackup,
+                                    recovery_vault_backup: recoveryVaultBackup,
                                     username: username,
                                     phone: phone
                                 }
                             );
                         } catch (updateError: any) {
-                            if (updateError?.message?.includes("vault_backup") || updateError?.message?.includes("legacy_vault_backups")) {
+                            if (updateError?.message?.includes("vault_backup") || updateError?.message?.includes("legacy_vault_backups") || updateError?.message?.includes("recovery_vault_backup")) {
                                 await databases.updateDocument(
                                     APPWRITE_CONFIG.DATABASE_ID,
                                     APPWRITE_CONFIG.COLLECTION_USERS,

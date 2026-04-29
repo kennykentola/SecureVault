@@ -33,7 +33,7 @@ import { SecurityDashboard } from '../components/SecurityDashboard';
 import { storage } from '../lib/appwrite';
 
 export const Dashboard: React.FC = () => {
-    const { user, privateKey, legacyPrivateKeys, unlockKeys, checkKeys, setupNewVault, logout } = useAuth();
+    const { user, privateKey, legacyPrivateKeys, unlockKeys, checkKeys, setupNewVault, logout, recoverVault } = useAuth();
     const [sidebarTab, setSidebarTab] = useState<'chats' | 'updates' | 'calls'>('chats');
     const [networkUsers, setNetworkUsers] = useState<any[]>([]);
     const [groups, setGroups] = useState<any[]>([]);
@@ -41,6 +41,12 @@ export const Dashboard: React.FC = () => {
     const [messages, setMessages] = useState<any[]>([]);
     const [newMessage, setNewMessage] = useState("");
     const [showUnlockModal, setShowUnlockModal] = useState(false);
+    
+    // Recovery states
+    const [newRecoveryKey, setNewRecoveryKey] = useState<string | null>(null);
+    const [isRecovering, setIsRecovering] = useState(false);
+    const [recoveryKeyInput, setRecoveryKeyInput] = useState("");
+    const [recoveryPin, setRecoveryPin] = useState("");
 
 
     const [showProfile, setShowProfile] = useState(false);
@@ -273,6 +279,11 @@ export const Dashboard: React.FC = () => {
 
     useEffect(() => {
         fetchInitialData();
+        const storedRecoveryKey = sessionStorage.getItem('new_recovery_key');
+        if (storedRecoveryKey) {
+            setNewRecoveryKey(storedRecoveryKey);
+            sessionStorage.removeItem('new_recovery_key');
+        }
     }, [user]);
 
     useEffect(() => {
@@ -745,7 +756,7 @@ export const Dashboard: React.FC = () => {
 
                     if (isMedia) {
                         const decryptedKeyBase64 = await withPrivateKeyFallback((candidateKey) => (
-                            HybridEncryptor.decrypt({ encryptedKey: dmKeyToUse }, candidateKey)
+                            HybridEncryptor.decryptKeyWithRSA(dmKeyToUse, candidateKey)
                         ));
                         mediaData = { ...msg.payload, decryptedKeyBase64 };
                     } else {
@@ -1546,7 +1557,7 @@ export const Dashboard: React.FC = () => {
                             
                             if (isMedia) {
                                 const decryptedKeyBase64 = await withPrivateKeyFallback((candidateKey) => (
-                                    HybridEncryptor.decrypt({ encryptedKey: dmKeyToUse }, candidateKey)
+                                    HybridEncryptor.decryptKeyWithRSA(dmKeyToUse, candidateKey)
                                 ));
                                 mediaData = { ...m, ...msgPayload, decryptedKeyBase64 };
                             } else {
@@ -2143,7 +2154,7 @@ const isLink = searchText.includes("http");
                                             onChange={(e) => setNewMessage(e.target.value)}
                                             onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
                                             placeholder="Type a message"
-                                            className="flex-1 min-w-0 bg-transparent border-none py-3 md:py-4 px-1 md:px-2 text-sm md:text-base focus:ring-0 resize-none max-h-40 scrollbar-hide text-slate-800 placeholder:text-slate-500"
+                                            className="flex-1 min-w-0 bg-transparent border-none py-3 md:py-4 px-1 md:px-2 text-sm md:text-base focus:ring-0 resize-none max-h-40 scrollbar-hide text-white placeholder:text-white/50"
                                         />
                                     
                                     <div className="flex items-center gap-1 md:gap-2 pb-1 md:pb-1.5 shrink-0">
@@ -2357,7 +2368,110 @@ const isLink = searchText.includes("http");
                     )}
                 </AnimatePresence>
             </main>
-            <PinInput isOpen={showUnlockModal} onComplete={handleUnlock} onSetup={setupNewVault} />
+            <PinInput 
+                isOpen={showUnlockModal} 
+                onComplete={handleUnlock} 
+                onSetup={setupNewVault} 
+                onSuccess={(result) => {
+                    if (typeof result === 'string' && result) {
+                        setNewRecoveryKey(result);
+                    }
+                    setShowUnlockModal(false);
+                }}
+                onForgotPin={() => {
+                    setShowUnlockModal(false);
+                    setIsRecovering(true);
+                }}
+            />
+            
+            <AnimatePresence>
+                {newRecoveryKey && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+                        <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="w-full max-w-lg bg-white rounded-3xl p-8 space-y-6">
+                            <div className="text-center space-y-2">
+                                <h2 className="text-2xl font-black uppercase text-gray-900">Your Recovery Key</h2>
+                                <p className="text-sm text-gray-500">Save this key in a secure place. If you forget your PIN, this is the ONLY way to recover your encrypted messages.</p>
+                            </div>
+                            <div className="bg-gray-100 p-4 rounded-xl text-center border border-gray-200">
+                                <code className="text-xl font-mono font-bold text-gray-900">{newRecoveryKey}</code>
+                            </div>
+                            <button 
+                                onClick={() => setNewRecoveryKey(null)}
+                                className="w-full h-12 bg-blue-500 hover:bg-blue-600 text-white font-black uppercase tracking-widest rounded-xl transition-all"
+                            >
+                                I have saved it
+                            </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+
+                {isRecovering && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
+                        <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className="w-full max-w-lg bg-white rounded-3xl p-8 space-y-6">
+                            <div className="text-center space-y-2">
+                                <h2 className="text-2xl font-black uppercase text-gray-900">Recover Vault</h2>
+                                <p className="text-xs text-gray-500 font-bold tracking-wider uppercase">Enter your Recovery Key and a new PIN</p>
+                            </div>
+                            
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Recovery Key</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+                                        value={recoveryKeyInput}
+                                        onChange={(e) => setRecoveryKeyInput(e.target.value.toUpperCase())}
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-mono text-sm focus:border-blue-500 outline-none transition-all mt-1"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">New 6-Digit PIN</label>
+                                    <input 
+                                        type="password" 
+                                        maxLength={6}
+                                        placeholder="••••••"
+                                        value={recoveryPin}
+                                        onChange={(e) => setRecoveryPin(e.target.value.replace(/\D/g, ''))}
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 font-mono text-center tracking-[1em] focus:border-blue-500 outline-none transition-all mt-1"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex gap-4 pt-4">
+                                <button 
+                                    onClick={() => {
+                                        setIsRecovering(false);
+                                        setShowUnlockModal(true);
+                                        setRecoveryKeyInput('');
+                                        setRecoveryPin('');
+                                    }}
+                                    className="flex-1 py-3 text-xs font-black uppercase tracking-widest text-gray-500 hover:bg-gray-100 rounded-xl transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={async () => {
+                                        if (recoveryKeyInput.length < 24) return alert("Invalid Recovery Key length.");
+                                        if (recoveryPin.length !== 6) return alert("PIN must be 6 digits.");
+                                        try {
+                                            await recoverVault(recoveryKeyInput, recoveryPin);
+                                            setIsRecovering(false);
+                                            setRecoveryKeyInput('');
+                                            setRecoveryPin('');
+                                            alert("Vault recovered successfully!");
+                                        } catch (e: any) {
+                                            alert(e.message);
+                                        }
+                                    }}
+                                    className="flex-1 py-3 bg-blue-500 hover:bg-blue-600 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all"
+                                >
+                                    Recover
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
             
             {/* New Group Modals */}
             {selectedChat?.type === 'group' && (

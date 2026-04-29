@@ -44,16 +44,27 @@ export const StatusList: React.FC<StatusListProps> = ({ user, onAdd, onView, ref
             })));
 
             // 2. Fetch friend statuses
-            // For now, fetch all active statuses not from me and not excluding me
             const friendRes = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "statuses", [
                 Query.notEqual("user_id", user.$id),
                 Query.greaterThan("expires_at", now),
                 Query.orderDesc("created_at")
             ]);
 
-            // Filter out statuses that exclude me (frontend filtering for now)
+            // 3. Fetch users who have shared their status key with us
+            let allowedPosterIds: string[] = [];
+            try {
+                const keysRes = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "status_keys", [
+                    Query.equal("recipient_id", user.$id),
+                    Query.limit(100)
+                ]);
+                allowedPosterIds = keysRes.documents.map(d => d.poster_id);
+            } catch (e) {
+                console.warn("Failed to fetch status keys for filtering", e);
+            }
+
+            // Filter out statuses that exclude me AND those we don't have a decryption key for
             const visibleStatuses = friendRes.documents.filter(s => 
-                !s.excluded_users?.includes(user.$id)
+                !s.excluded_users?.includes(user.$id) && allowedPosterIds.includes(s.user_id)
             );
 
             // Group by user

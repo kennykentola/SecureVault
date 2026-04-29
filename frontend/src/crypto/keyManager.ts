@@ -315,7 +315,6 @@ export const KeyManager = {
         }
     },
 
-    // Import packaged backup into local storage
     importBackup: async (backupJson: string, pin: string): Promise<CryptoKey> => {
         try {
             const privateKey = await KeyManager.restorePrivateKeyFromBackup(backupJson, pin);
@@ -324,5 +323,91 @@ export const KeyManager = {
             console.error("Backup restoration failed:", e);
             throw new Error("Failed to restore vault. Please check your PIN.");
         }
+    },
+
+    // --- RECOVERY KEY METHODS ---
+
+    generateRecoveryKey: (): string => {
+        const array = new Uint8Array(16);
+        window.crypto.getRandomValues(array);
+        const hex = Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
+        // Format as XXXX-XXXX-XXXX-XXXX
+        return `${hex.slice(0, 4)}-${hex.slice(4, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 24)}`.toUpperCase();
+    },
+
+    deriveRecoveryAesKey: async (recoveryKey: string, salt: Uint8Array): Promise<CryptoKey> => {
+        const encoder = new TextEncoder();
+        const baseKey = await window.crypto.subtle.importKey(
+            "raw",
+            encoder.encode(recoveryKey.replace(/-/g, '')) as BufferSource,
+            "PBKDF2",
+            false,
+            ["deriveKey"]
+        );
+        return await window.crypto.subtle.deriveKey(
+            {
+                name: "PBKDF2",
+                salt: salt as BufferSource,
+                iterations: 100000,
+                hash: "SHA-256",
+            },
+            baseKey,
+            { name: "AES-GCM", length: 256 },
+            true,
+            ["encrypt", "decrypt"]
+        );
+    },
+
+    createRecoveryVaultBackupRecord: async (privateKey: CryptoKey, recoveryKey: string, publicKey: string): Promise<VaultBackupRecord> => {
+        const exported = await window.crypto.subtle.exportKey("pkcs8", privateKey);
+        const salt = window.crypto.getRandomValues(new Uint8Array(16));
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const aesKey = await KeyManager.deriveRecoveryAesKey(recoveryKey, salt);
+        
+        const encrypted = await window.crypto.subtle.encrypt(
+            { name: "AES-GCM", iv },
+            aesKey,
+            exported
+        );
+
+        const backupData = {
+            encryptedKey: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
+            iv: btoa(String.fromCharCode(...new Uint8Array(iv))),
+            salt: btoa(String.fromCharCode(...new Uint8Array(salt)))
+        };
+
+        return {
+            public_key: publicKey,
+            backup: JSON.stringify(backupData),
+            created_at: new Date().toISOString()
+        };
+    },
+
+    restorePrivateKeyFromRecoveryBackup: async (backupJson: string, recoveryKey: string): Promise<CryptoKey> => {
+        try {
+            const data = JSON.parse(backupJson);
+            const encryptedKey = new Uint8Array(atob(data.encryptedKey).split('').map(c => c.charCodeAt(0)));
+            const iv = new Uint8Array(atob(data.iv).split('').map(c => c.charCodeAt(0)));
+            const salt = new Uint8Array(atob(data.salt).split('').map(c => c.charCodeAt(0)));
+
+            const aesKey = await KeyManager.deriveRecoveryAesKey(recoveryKey, salt);
+            const decrypted = await window.crypto.subtle.decrypt(
+                { name: "AES-GCM", iv },
+                aesKey,
+                encryptedKey
+            );
+
+            return await window.crypto.subtle.importKey(
+                "pkcs8",
+                decrypted,
+                { name: "RSA-OAEP", hash: "SHA-256" },
+                true,
+                ["decrypt"]
+            );
+        } catch (e) {
+            console.error("Recovery key decryption failed:", e);
+            throw new Error("Invalid Recovery Key. Please try again.");
+        }
     }
 };
+

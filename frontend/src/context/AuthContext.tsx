@@ -17,7 +17,8 @@ interface AuthContextType {
     unlockKeys: (pin: string) => Promise<void>;
     resetKeys: () => Promise<void>;
     checkKeys: () => Promise<boolean>;
-    setupNewVault: (pin: string) => Promise<void>;
+    setupNewVault: (pin: string) => Promise<string | void>;
+    recoverVault: (recoveryKey: string, newPin: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -409,15 +410,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             sessionStorage.setItem('unlocked_vault', JSON.stringify(jwk));
             await persistLegacyKeysToSession(unlockedLegacyKeys);
             console.log("New vault initialized and synced.");
+            
+            // Generate and return recovery key for the UI to display
+            const recoveryKey = KeyManager.generateRecoveryKey();
+            const recoveryBackupRecord = await KeyManager.createRecoveryVaultBackupRecord(keys.privateKey, recoveryKey, publicKeyStr);
+            
+            try {
+                await databases.updateDocument(
+                    APPWRITE_CONFIG.DATABASE_ID,
+                    APPWRITE_CONFIG.COLLECTION_USERS,
+                    res.documents[0].$id,
+                    { recovery_vault_backup: JSON.stringify(recoveryBackupRecord) }
+                );
+            } catch (updateError: any) {
+                console.warn('[Security] recovery_vault_backup attribute not in schema, skipping recovery backup sync.', updateError);
+            }
+            
+            return recoveryKey;
         } catch (e: any) {
             console.error("Setup failed", e);
             throw new Error(e.message || "Failed to initialize new vault.");
         }
     };
 
+    const recoverVault = async (recoveryKey: string, newPin: string) => {
+        try {
+            const profile = await getMyProfileDocument();
+            if (!profile) throw new Error("Could not find user profile.");
+            
+            const recoveryBackup = normalizeBackupRecord(profile.doc.recovery_vault_backup);
+            if (!recoveryBackup) throw new Error("No recovery backup found for this account. Recovery is not possible.");
+
+            const restoredPrivateKey = await KeyManager.restorePrivateKeyFromRecoveryBackup(recoveryBackup.backup, recoveryKey);
+            const restoredPublicKey = await KeyManager.importPublicKey(recoveryBackup.public_key);
+            
+            await KeyManager.storePrivateKey(restoredPrivateKey, restoredPublicKey, newPin);
+            
+            setPrivateKey(restoredPrivateKey);
+            const jwk = await window.crypto.subtle.exportKey("jwk", restoredPrivateKey);
+            sessionStorage.setItem('unlocked_vault', JSON.stringify(jwk));
+            
+            await syncCurrentVaultBackup(restoredPrivateKey, newPin, recoveryBackup.public_key);
+            
+            const unlockedLegacyKeys = await loadLegacyPrivateKeys(newPin, recoveryBackup.public_key);
+            setLegacyPrivateKeys(unlockedLegacyKeys);
+            await persistLegacyKeysToSession(unlockedLegacyKeys);
+            console.log("Vault successfully recovered.");
+        } catch (e: any) {
+            console.error("Vault recovery failed", e);
+            throw new Error(e.message || "Failed to recover vault. Please check your Recovery Key.");
+        }
+    };
 
     return (
-        <AuthContext.Provider value={{ user, loading, privateKey, legacyPrivateKeys, loginEmail, loginPhone, loginGoogle, sendPhoneOTP, logout, unlockKeys, resetKeys, checkKeys, setupNewVault }}>
+        <AuthContext.Provider value={{ user, loading, privateKey, legacyPrivateKeys, loginEmail, loginPhone, loginGoogle, sendPhoneOTP, logout, unlockKeys, resetKeys, checkKeys, setupNewVault, recoverVault }}>
             {children}
         </AuthContext.Provider>
     );

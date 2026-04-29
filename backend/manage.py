@@ -100,6 +100,7 @@ class AppManager:
         self.ensure_attribute(coll_users, "phone", "string", 20)
         self.ensure_attribute(coll_users, "public_key", "string", 4000)
         self.ensure_attribute(coll_users, "vault_backup", "string", 12000)
+        self.ensure_attribute(coll_users, "recovery_vault_backup", "string", 12000)
         self.ensure_attribute(coll_users, "legacy_vault_backups", "string", 30000)
         self.ensure_attribute(coll_users, "username", "string", 100)
         self.ensure_attribute(coll_users, "email", "string", 100)
@@ -223,7 +224,8 @@ class AppManager:
                 self.get_val(bucket, 'name'),
                 permissions=["read(\"any\")", "create(\"users\")", "update(\"users\")", "delete(\"users\")"],
                 file_security=True,
-                enabled=True
+                enabled=True,
+                allowed_file_extensions=[]
             )
             print("Bucket permissions updated.")
         except Exception as e:
@@ -233,7 +235,8 @@ class AppManager:
                     self.bucket_id,
                     "SecureVault Storage",
                     permissions=["read(\"any\")", "create(\"users\")", "update(\"users\")", "delete(\"users\")"],
-                    file_security=True
+                    file_security=True,
+                    allowed_file_extensions=[]
                 )
                 print("Bucket created with correct permissions.")
             except Exception as e2:

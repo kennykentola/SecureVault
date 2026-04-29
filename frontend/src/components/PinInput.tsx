@@ -6,14 +6,15 @@ import { KeyManager } from '../crypto/keyManager';
 interface PinInputProps {
     length?: number;
     onComplete: (pin: string) => void;
-    onSetup?: (pin: string) => void | Promise<void>;
+    onSetup?: (pin: string) => void | Promise<void | string>;
     onChange?: (pin: string) => void;
     isOpen?: boolean;
-    onSuccess?: () => void;
+    onSuccess?: (result?: string) => void;
+    onForgotPin?: () => void;
     variant?: 'modal' | 'embedded';
 }
 
-export const PinInput: React.FC<PinInputProps> = ({ length = 6, onComplete, onSetup, onChange, isOpen, onSuccess, variant = 'modal' }) => {
+export const PinInput: React.FC<PinInputProps> = ({ length = 6, onComplete, onSetup, onChange, isOpen, onSuccess, onForgotPin, variant = 'modal' }) => {
     const [values, setValues] = useState<string[]>(new Array(length).fill(""));
     const [isShaking, setIsShaking] = useState(false);
     const [isSetupMode, setIsSetupMode] = useState(false);
@@ -29,12 +30,13 @@ export const PinInput: React.FC<PinInputProps> = ({ length = 6, onComplete, onSe
 
     const handleAction = async (pin: string) => {
         try {
+            let result: void | string;
             if (isSetupMode && onSetup) {
-                await onSetup(pin);
+                result = await onSetup(pin);
             } else {
-                await onComplete(pin);
+                result = await onComplete(pin);
             }
-            if (onSuccess) onSuccess();
+            if (onSuccess) onSuccess(typeof result === 'string' ? result : undefined);
         } catch (err) {
             setIsShaking(true);
             setTimeout(() => setIsShaking(false), 500);
@@ -160,6 +162,14 @@ export const PinInput: React.FC<PinInputProps> = ({ length = 6, onComplete, onSe
                                         Setup as New Device
                                     </button>
                                 </p>
+                                {onForgotPin && (
+                                    <button 
+                                        onClick={onForgotPin}
+                                        className="text-primary-500 font-bold text-[11px] hover:underline uppercase tracking-widest mt-2 block w-full"
+                                    >
+                                        Forgot PIN? Use Recovery Key
+                                    </button>
+                                )}
                                 <button 
                                     onClick={async () => {
                                         if (window.confirm("FATAL: This will wipe your local security vault. All previous messages will be lost. Reset keys anyway?")) {
