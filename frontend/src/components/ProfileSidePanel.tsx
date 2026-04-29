@@ -1,10 +1,11 @@
 import React from 'react';
 import { Query } from 'appwrite';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Image, Files, BellOff, Flag, ShieldCheck, Phone, Video, Search, Loader2 } from 'lucide-react';
+import { X, Image, Files, BellOff, Flag, ShieldCheck, Phone, Video, Search, Loader2, FileText, ExternalLink, Download, Film, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { KeyManager } from '../crypto/keyManager';
 import { databases, APPWRITE_CONFIG } from '../lib/appwrite';
+import { HybridEncryptor } from '../crypto/encryptor';
 
 interface ProfileSidePanelProps {
     isOpen: boolean;
@@ -43,8 +44,75 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
     const bio = item?.bio || item?.description || (isGroup ? "Group description" : "Hey there! I'm using SecureVault.");
     const avatarUrl = item ? getAvatarUrl(item.avatar_id) : undefined;
 
+    const [activeTab, setActiveTab] = React.useState<'media' | 'docs' | 'links'>('media');
+
+
     // Filter shared media
-    const mediaMessages = messages.filter(m => m.type === 'file' || m.type === 'voice' || m.gif_url);
+    const mediaItems = messages.filter(m => {
+        if (m.gif_url) return true;
+        if (m.type !== 'file') return false;
+        const mime = m.originalMimeType || m.original_mime_type || m.mediaData?.originalMimeType || "";
+        return mime.startsWith('image/') || mime.startsWith('video/');
+    });
+
+    const docItems = messages.filter(m => {
+        if (m.type !== 'file') return false;
+        const mime = m.originalMimeType || m.original_mime_type || m.mediaData?.originalMimeType || "";
+        return !mime.startsWith('image/') && !mime.startsWith('video/');
+    });
+
+    const linkItems = messages.filter(m => {
+        if (m.type !== 'text') return false;
+        const text = (m.text || "").toString();
+        return text.includes('http://') || text.includes('https://');
+    }).map(m => {
+        const text = (m.text || "").toString();
+        const match = text.match(/https?:\/\/[^\s]+/);
+        return { ...m, url: match ? match[0] : null };
+    }).filter(m => !!m.url);
+
+    const handleDownload = async (msg: any) => {
+        if (!msg.fileId || !msg.iv) return;
+        
+        try {
+            // This is a simplified version of the MessageBubble download logic
+            // In a real app, you'd share this logic in a hook
+            const bucketId = APPWRITE_CONFIG.BUCKET_ID;
+            const fileId = msg.fileId;
+            const iv = msg.iv;
+            const originalMimeType = msg.originalMimeType || msg.original_mime_type || msg.mediaData?.originalMimeType;
+            const fileName = msg.fileName || msg.filename || "download";
+
+            // Get decryption key
+            const rawKeyBase64 = msg.decryptedKeyBase64 || msg.mediaData?.decryptedKeyBase64;
+            if (!rawKeyBase64) {
+                alert("Decryption key not available for this session.");
+                return;
+            }
+
+            const response = await fetch(`${APPWRITE_CONFIG.ENDPOINT}/storage/buckets/${bucketId}/files/${fileId}/download?project=${APPWRITE_CONFIG.PROJECT_ID}`);
+            if (!response.ok) throw new Error("Download failed");
+            const fileBlob = await response.blob();
+
+            const rawKey = new Uint8Array(atob(rawKeyBase64).split('').map(c => c.charCodeAt(0)));
+            const aesKey = await window.crypto.subtle.importKey(
+                "raw", rawKey, { name: "AES-GCM" }, true, ["decrypt"]
+            );
+
+            const decryptedBlob = await HybridEncryptor.decryptFile(fileBlob, aesKey, iv, originalMimeType);
+            const url = URL.createObjectURL(decryptedBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            link.click();
+            
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (e) {
+            console.error("Download failed", e);
+            alert("Security protocol failed to download artifact.");
+        }
+    };
 
     const statusLabel = isGroup
         ? `${groupMemberCount ?? item?.memberCount ?? 0} Members`
@@ -268,37 +336,115 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                     <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest pt-2">{updatedLabel}</p>
                                 </section>
 
-                                {/* Media Section */}
                                 <section className="bg-white p-6 rounded-4xl border border-slate-100 shadow-sm space-y-6">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-3">
                                             <div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500">
                                                 <Image className="w-4 h-4" />
                                             </div>
-                                            <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-700">Media, Links and Docs</h4>
+                                            <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-700">Intelligence Catalog</h4>
                                         </div>
-                                        <button className="text-[10px] font-black text-blue-500 hover:underline uppercase tracking-widest">
-                                            {mediaMessages.length} items
-                                        </button>
                                     </div>
 
-                                    {mediaMessages.length > 0 ? (
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {mediaMessages.slice(0, 6).map((m, i) => (
-                                                <div key={i} className="aspect-square bg-slate-100 rounded-xl overflow-hidden border border-slate-200 group relative cursor-pointer">
-                                                    {m.gif_url ? (
-                                                        <img src={m.gif_url} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-slate-400">
-                                                            {m.type === 'voice' ? <Mic className="w-5 h-5" /> : <Files className="w-5 h-5" />}
+                                    {/* Tabs */}
+                                    <div className="flex p-1 bg-slate-100 rounded-2xl">
+                                        {(['media', 'docs', 'links'] as const).map((tab) => (
+                                            <button
+                                                key={tab}
+                                                onClick={() => setActiveTab(tab)}
+                                                className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
+                                                    activeTab === tab 
+                                                        ? 'bg-white text-blue-600 shadow-sm' 
+                                                        : 'text-slate-400 hover:text-slate-600'
+                                                }`}
+                                            >
+                                                {tab}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <div className="min-h-[200px]">
+                                        {activeTab === 'media' && (
+                                            mediaItems.length > 0 ? (
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    {mediaItems.slice(0, 12).map((m, i) => (
+                                                        <div 
+                                                            key={i} 
+                                                            onClick={() => handleDownload(m)}
+                                                            className="aspect-square bg-slate-100 rounded-xl overflow-hidden border border-slate-200 group relative cursor-pointer"
+                                                        >
+                                                            {m.gif_url ? (
+                                                                <img src={m.gif_url} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                                                            ) : (
+                                                                <div className="w-full h-full flex items-center justify-center text-slate-400 bg-slate-200/50">
+                                                                    {(m.originalMimeType || m.original_mime_type || m.mediaData?.originalMimeType || "").startsWith('video/') 
+                                                                        ? <Film className="w-6 h-6" /> 
+                                                                        : <Image className="w-6 h-6" />
+                                                                    }
+                                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                                                        <Download className="w-5 h-5 text-white" />
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    )}
+                                                    ))}
                                                 </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <p className="text-[11px] text-slate-400 font-medium italic text-center py-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200">No media shared yet</p>
-                                    )}
+                                            ) : (
+                                                <EmptyState icon={<Image />} text="No visual artifacts" />
+                                            )
+                                        )}
+
+                                        {activeTab === 'docs' && (
+                                            docItems.length > 0 ? (
+                                                <div className="space-y-2">
+                                                    {docItems.slice(0, 10).map((m, i) => (
+                                                        <button 
+                                                            key={i} 
+                                                            onClick={() => handleDownload(m)}
+                                                            className="w-full flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-2xl hover:bg-slate-100 transition-all text-left group"
+                                                        >
+                                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-500 shadow-sm">
+                                                                <FileText className="w-5 h-5" />
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-xs font-bold text-slate-800 truncate">{m.fileName || m.filename || "Document"}</p>
+                                                                <p className="text-[9px] text-slate-400 font-black uppercase">{m.originalMimeType?.split('/')[1] || 'FILE'}</p>
+                                                            </div>
+                                                            <Download className="w-4 h-4 text-slate-300 group-hover:text-blue-500" />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <EmptyState icon={<Files />} text="No documents shared" />
+                                            )
+                                        )}
+
+                                        {activeTab === 'links' && (
+                                            linkItems.length > 0 ? (
+                                                <div className="space-y-2">
+                                                    {linkItems.slice(0, 10).map((m, i) => (
+                                                        <a 
+                                                            key={i} 
+                                                            href={m.url} 
+                                                            target="_blank" 
+                                                            rel="noopener noreferrer"
+                                                            className="w-full flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-2xl hover:bg-slate-100 transition-all text-left group"
+                                                        >
+                                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-500 shadow-sm">
+                                                                <ExternalLink className="w-5 h-5" />
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-xs font-bold text-blue-600 truncate underline">{m.url}</p>
+                                                                <p className="text-[9px] text-slate-400 font-black uppercase">Shared link</p>
+                                                            </div>
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <EmptyState icon={<ExternalLink />} text="No secure links found" />
+                                            )
+                                        )}
+                                    </div>
                                 </section>
 
                                 {/* Security Section */}
@@ -343,7 +489,7 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                     <section className="bg-white p-6 rounded-4xl border border-slate-100 shadow-sm space-y-6">
                                         <div className="flex items-center gap-3">
                                             <div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
-                                                <UsersIcon className="w-4 h-4" />
+                                                <Users className="w-4 h-4" />
                                             </div>
                                             <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-700">Groups in Common</h4>
                                         </div>
@@ -404,15 +550,11 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
     );
 };
 
-// Internal icon helpers
-const UsersIcon = ({ className }: { className?: string }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-);
-
-const Mic = ({ className }: { className?: string }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" x2="12" y1="19" y2="22" />
-    </svg>
+const EmptyState = ({ icon, text }: { icon: React.ReactNode, text: string }) => (
+    <div className="flex flex-col items-center justify-center py-12 text-center opacity-40">
+        <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 mb-4">
+            {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: 'w-6 h-6' })}
+        </div>
+        <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">{text}</p>
+    </div>
 );
