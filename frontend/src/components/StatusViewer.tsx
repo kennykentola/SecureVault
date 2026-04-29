@@ -200,12 +200,8 @@ export const StatusViewer: React.FC<StatusViewerProps> = ({
             await databases.deleteDocument(APPWRITE_CONFIG.DATABASE_ID, "statuses", currentId);
             console.log("[Security] Artifact record deleted.");
             
-            // 3. Close or Move to next
-            if (statuses.length === 1) {
-                onClose();
-            } else {
-                handleNext();
-            }
+            // 3. Close the viewer to avoid stale state
+            onClose();
             
             if (onDeleted) onDeleted();
         } catch (e) {

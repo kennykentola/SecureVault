@@ -5,7 +5,7 @@ import {
     Shield, Loader2, Send, Search, UserMinus
 } from 'lucide-react';
 import { databases, storage, APPWRITE_CONFIG } from '../lib/appwrite';
-import { ID, Query } from 'appwrite';
+import { ID, Query, Permission, Role } from 'appwrite';
 import { KeyManager } from '../crypto/keyManager';
 import { HybridEncryptor } from '../crypto/encryptor';
 import { useAuth } from '../context/AuthContext';
@@ -85,12 +85,31 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
                 // In a real E2EE scenario, we encrypt the file blob first
                 // const { blob, iv } = await HybridEncryptor.encryptFile(selectedFile, statusKey);
                 // For this demo, let's upload the file directly to storage
-                const upload = await storage.createFile(APPWRITE_CONFIG.BUCKET_ID, ID.unique(), selectedFile);
+                const upload = await storage.createFile(
+                    APPWRITE_CONFIG.BUCKET_ID, 
+                    ID.unique(), 
+                    selectedFile,
+                    [
+                        Permission.read(Role.any()),
+                        Permission.write(Role.user(user.$id)),
+                        Permission.delete(Role.user(user.$id))
+                    ]
+                );
                 payload.content_url = upload.$id;
-                payload.caption = caption; // Should ideally be encrypted too
+                payload.caption = caption;
             }
 
-            await databases.createDocument(APPWRITE_CONFIG.DATABASE_ID, "statuses", ID.unique(), payload);
+            await databases.createDocument(
+                APPWRITE_CONFIG.DATABASE_ID, 
+                "statuses", 
+                ID.unique(), 
+                payload,
+                [
+                    Permission.read(Role.any()),
+                    Permission.write(Role.user(user?.$id || '')),
+                    Permission.delete(Role.user(user?.$id || ''))
+                ]
+            );
             
             // Share key with authorized viewers
             try {
