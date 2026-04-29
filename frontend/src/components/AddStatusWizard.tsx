@@ -228,7 +228,7 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
                                             style={{ backgroundColor: bgColor }}
                                         >
                                             <textarea 
-                                                className="bg-transparent border-none outline-none text-white text-3xl font-black italic text-center w-full placeholder:text-white/50 resize-none h-full flex items-center justify-center"
+                                                className="status-textarea bg-transparent border-none outline-none text-white text-3xl font-black italic text-center w-full placeholder:text-white/50 resize-none h-full flex items-center justify-center"
                                                 placeholder="Decrypting thoughts..."
                                                 value={textContent}
                                                 onChange={(e) => setTextContent(e.target.value)}

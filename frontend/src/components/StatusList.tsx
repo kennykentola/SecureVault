@@ -77,7 +77,7 @@ export const StatusList: React.FC<StatusListProps> = ({ user, onAdd, onView, ref
                             Query.equal("user_id", s.user_id)
                         ]);
                         const uInfo = uRes.documents[0];
-                        grouped[s.user_id] = [{ ...s, userName: uInfo?.username }];
+                        grouped[s.user_id] = [{ ...s, userName: uInfo?.username || uInfo?.name }];
                     } catch {
                         grouped[s.user_id] = [{ ...s, userName: 'Agent X' }];
                     }
