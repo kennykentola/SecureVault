@@ -44,6 +44,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     const rawKeyBase64 = msg.decryptedKeyBase64 || msg.mediaData?.decryptedKeyBase64;
     const localFile = msg.localFile instanceof File ? msg.localFile : null;
     const originalMimeType = msg.originalMimeType || msg.original_mime_type || msg.mediaData?.originalMimeType || msg.mediaData?.original_mime_type || localFile?.type;
+    const isPreviewable = originalMimeType?.startsWith('image/') || originalMimeType?.startsWith('video/');
+
+    React.useEffect(() => {
+        if (localFile && !decryptedUrl) {
+            setDecryptedUrl(URL.createObjectURL(localFile));
+        }
+    }, [localFile, decryptedUrl]);
 
     // Close menu when clicking away
     React.useEffect(() => {
@@ -165,6 +172,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 setTimeout(() => {
                     playAudio().catch(() => {});
                 }, 100);
+            } else if (!isPreviewable) {
+                setTimeout(() => {
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = fileName || 'file';
+                    link.click();
+                }, 100);
             }
         } catch (e) {
             console.error("Decryption failed", e);
@@ -261,25 +275,45 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                                 )}
                             </div>
                         ) : msg.type === 'file' ? (
-                            <button 
-                                onClick={handleMediaAction}
-                                className={`flex items-center gap-4 p-3 rounded-xl border transition-all ${
-                                    isOwn ? 'bg-primary-700/30 border-primary-400/30 hover:bg-primary-700/50' : 'bg-[#FFF9E3]/50 border-[#FFF5CC] hover:bg-[#FFF9E3]/80'
-                                }`}
-                            >
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isOwn ? 'bg-blue-500' : 'bg-blue-100'}`}>
-                                    <FileText className={`w-5 h-5 ${isOwn ? 'text-white' : 'text-blue-600'}`} />
-                                </div>
-                                <div className="text-left min-w-0 flex-1">
-                                    <p className={`text-xs font-bold truncate ${isOwn ? 'text-white' : 'text-slate-800'}`}>{msg.fileName}</p>
-                                    <p className={`text-[10px] font-medium ${isOwn ? 'text-blue-200' : 'text-slate-400'}`}>
-                                        {isDecrypting ? 'Decrypting...' : decryptedUrl ? 'Ready to Download' : 'Encrypted File'}
-                                    </p>
-                                </div>
-                                <div className={`p-2 rounded-lg ${isOwn ? 'bg-blue-500/50' : 'bg-white shadow-sm'}`}>
-                                    <Download className={`w-3.5 h-3.5 ${isOwn ? 'text-white' : 'text-slate-500'}`} />
-                                </div>
-                            </button>
+                            <div className="flex flex-col gap-1">
+                                {isPreviewable && decryptedUrl ? (
+                                    originalMimeType?.startsWith('video/') ? (
+                                        <div className="relative group">
+                                            <video src={decryptedUrl} controls className="max-w-[240px] rounded-xl shadow-sm border border-black/5" />
+                                            <button onClick={handleMediaAction} className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" title="Download Video">
+                                                <Download className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="relative group">
+                                            <img src={decryptedUrl} alt={fileName} className="max-w-[240px] rounded-xl shadow-sm object-cover border border-black/5" />
+                                            <button onClick={handleMediaAction} className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/70 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity" title="Download Image">
+                                                <Download className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    )
+                                ) : (
+                                    <button 
+                                        onClick={handleMediaAction}
+                                        className={`flex items-center gap-4 p-3 rounded-xl border transition-all ${
+                                            isOwn ? 'bg-primary-700/30 border-primary-400/30 hover:bg-primary-700/50' : 'bg-[#FFF9E3]/50 border-[#FFF5CC] hover:bg-[#FFF9E3]/80'
+                                        }`}
+                                    >
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isOwn ? 'bg-blue-500' : 'bg-blue-100'}`}>
+                                            <FileText className={`w-5 h-5 ${isOwn ? 'text-white' : 'text-blue-600'}`} />
+                                        </div>
+                                        <div className="text-left min-w-0 flex-1">
+                                            <p className={`text-xs font-bold truncate ${isOwn ? 'text-white' : 'text-slate-800'}`}>{msg.fileName}</p>
+                                            <p className={`text-[10px] font-medium ${isOwn ? 'text-blue-200' : 'text-slate-400'}`}>
+                                                {isDecrypting ? 'Decrypting...' : decryptedUrl ? 'Ready to Download' : 'Encrypted File'}
+                                            </p>
+                                        </div>
+                                        <div className={`p-2 rounded-lg ${isOwn ? 'bg-blue-500/50' : 'bg-white shadow-sm'}`}>
+                                            <Download className={`w-3.5 h-3.5 ${isOwn ? 'text-white' : 'text-slate-500'}`} />
+                                        </div>
+                                    </button>
+                                )}
+                            </div>
                         ) : msg.gif_url ? (
                             <img src={msg.gif_url} alt="GIF" className="rounded-lg max-w-full shadow-lg border border-black/5" />
                         ) : (

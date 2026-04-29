@@ -4,7 +4,7 @@ import { useWebSocket } from '../hooks/useWebSocket';
 import { HybridEncryptor } from '../crypto/encryptor';
 import { KeyManager } from '../crypto/keyManager';
 import { databases, APPWRITE_CONFIG } from '../lib/appwrite';
-import { Query, ID } from 'appwrite';
+import { Query, ID, Permission, Role } from 'appwrite';
 import {
     Send, Lock as LockIcon, ShieldCheck, LogOut, Search,
     ShieldAlert,
@@ -1315,7 +1315,8 @@ export const Dashboard: React.FC = () => {
                 ID.unique(),
                 new File([blob], getEncryptedUploadName(file.name, type, file.type), {
                     type: 'application/octet-stream'
-                })
+                }),
+                [Permission.read(Role.any())]
             );
 
 
@@ -2043,7 +2044,7 @@ export const Dashboard: React.FC = () => {
                                 const searchText = (m.text as string || "").toLowerCase();
                                 const matchesSearch = searchText.includes(chatSearchQuery.toLowerCase());
                                 const isMedia = m.type === 'voice' || m.type === 'file' || m.gif_url;
-const isLink = searchText.includes("http");
+                                const isLink = searchText.includes("http");
                                 
                                 if (searchFilters.media && !isMedia) return false;
                                 if (searchFilters.links && !isLink) return false;
@@ -2154,7 +2155,7 @@ const isLink = searchText.includes("http");
                                             onChange={(e) => setNewMessage(e.target.value)}
                                             onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
                                             placeholder="Type a message"
-                                            className="flex-1 min-w-0 bg-transparent border-none py-3 md:py-4 px-1 md:px-2 text-sm md:text-base focus:ring-0 resize-none max-h-40 scrollbar-hide text-white placeholder:text-white/50"
+                                            className="flex-1 min-w-0 bg-transparent border-none py-3 md:py-4 px-1 md:px-2 text-sm md:text-base focus:ring-0 resize-none max-h-40 scrollbar-hide text-slate-800 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
                                         />
                                     
                                     <div className="flex items-center gap-1 md:gap-2 pb-1 md:pb-1.5 shrink-0">
