@@ -2,7 +2,7 @@
 
 :root {
   --bg-primary: #f8fafc;
-  --bg-secondary: #ffffff;
+  --bg-secondary: hsl(191, 41%, 94%);
   --bg-tertiary: #f1f5f9;
   --text-primary: #0f172a;
   --text-secondary: #334155;
@@ -322,46 +322,105 @@
 }
 
 /* Theme-aware utility overrides */
-.bg-white { background-color: #ffffff !important; }
-.bg-slate-50 { background-color: var(--bg-primary) !important; }
-.bg-slate-100 { background-color: var(--bg-tertiary) !important; }
-.bg-slate-200 { background-color: var(--bg-tertiary) !important; }
+.bg-white {
+  background-color: #ffffff !important;
+}
 
-.text-slate-900 { color: var(--text-primary) !important; }
-.text-slate-800 { color: var(--text-primary) !important; }
-.text-slate-700 { color: var(--text-secondary) !important; }
-.text-slate-600 { color: var(--text-secondary) !important; }
-.text-slate-500 { color: var(--text-secondary) !important; }
-.text-slate-400 { color: var(--text-muted) !important; }
-.text-gray-500 { color: var(--text-muted) !important; }
-.text-gray-600 { color: var(--text-secondary) !important; }
+.bg-slate-50 {
+  background-color: var(--bg-primary) !important;
+}
 
-.text-white { color: #ffffff !important; }
+.bg-slate-100 {
+  background-color: var(--bg-tertiary) !important;
+}
 
-.border-slate-200 { border-color: var(--border-color) !important; }
-.border-slate-100 { border-color: var(--border-color) !important; }
-.border-gray-200 { border-color: var(--border-color) !important; }
-.border-gray-100 { border-color: var(--border-color) !important; }
+.bg-slate-200 {
+  background-color: var(--bg-tertiary) !important;
+}
 
-.hover\:bg-slate-50:hover { background-color: var(--bg-tertiary) !important; }
-.hover\:bg-slate-100:hover { background-color: var(--bg-tertiary) !important; }
-.hover\:bg-slate-200:hover { background-color: var(--border-color) !important; }
+.text-slate-900 {
+  color: var(--text-primary) !important;
+}
+
+.text-slate-800 {
+  color: var(--text-primary) !important;
+}
+
+.text-slate-700 {
+  color: var(--text-secondary) !important;
+}
+
+.text-slate-600 {
+  color: var(--text-secondary) !important;
+}
+
+.text-slate-500 {
+  color: var(--text-secondary) !important;
+}
+
+.text-slate-400 {
+  color: var(--text-muted) !important;
+}
+
+.text-gray-500 {
+  color: var(--text-muted) !important;
+}
+
+.text-gray-600 {
+  color: var(--text-secondary) !important;
+}
+
+.text-white {
+  color: #ffffff !important;
+}
+
+.border-slate-200 {
+  border-color: var(--border-color) !important;
+}
+
+.border-slate-100 {
+  border-color: var(--border-color) !important;
+}
+
+.border-gray-200 {
+  border-color: var(--border-color) !important;
+}
+
+.border-gray-100 {
+  border-color: var(--border-color) !important;
+}
+
+.hover\:bg-slate-50:hover {
+  background-color: var(--bg-tertiary) !important;
+}
+
+.hover\:bg-slate-100:hover {
+  background-color: var(--bg-tertiary) !important;
+}
+
+.hover\:bg-slate-200:hover {
+  background-color: var(--border-color) !important;
+}
 
 /* Message bubbles */
 .message-in {
   background-color: var(--bg-secondary) !important;
   border-color: var(--border-color) !important;
 }
+
 .message-out {
   background-color: var(--accent) !important;
 }
 
 /* Input fields — exclude transparent ones (e.g. status wizard textarea) */
-input:not(.bg-transparent), textarea:not(.bg-transparent) {
+input:not(.bg-transparent),
+textarea:not(.bg-transparent) {
   background-color: var(--bg-primary) !important;
   color: var(--text-primary) !important;
 }
-input:not(.bg-transparent)::placeholder, textarea:not(.bg-transparent)::placeholder {
+
+input:not(.bg-transparent)::placeholder,
+textarea:not(.bg-transparent)::placeholder {
   color: var(--text-muted) !important;
 }
 
@@ -370,6 +429,7 @@ textarea.bg-transparent {
   background-color: transparent !important;
   color: #ffffff !important;
 }
+
 textarea.bg-transparent::placeholder {
   color: rgba(255, 255, 255, 0.5) !important;
 }
