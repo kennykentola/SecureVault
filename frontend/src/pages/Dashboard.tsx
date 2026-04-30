@@ -30,6 +30,7 @@ import { MessageBubble } from '../components/MessageBubble';
 import { ProfileSidePanel } from '../components/ProfileSidePanel';
 import { FindUsersModal } from '../components/FindUsersModal';
 import { SecurityDashboard } from '../components/SecurityDashboard';
+import { CallHistory } from '../components/CallHistory';
 import { storage } from '../lib/appwrite';
 
 export const Dashboard: React.FC = () => {
@@ -341,6 +342,12 @@ export const Dashboard: React.FC = () => {
             pendingStatusViewUpdatesRef.current.clear();
         }
     }, [showStatusViewer]);
+
+    useEffect(() => {
+        if (callState.isIncoming && callState.caller) {
+            logCall(callState.caller, callState.callType, 'incoming');
+        }
+    }, [callState.isIncoming]);
 
     useEffect(() => {
         let cancelled = false;
@@ -1696,13 +1703,33 @@ export const Dashboard: React.FC = () => {
     }, [searchQuery]);
 
 
-
     const openFirstChat = (type: 'user' | 'group') => {
         setSidebarTab('chats');
-        if (type === 'group' && groups.length > 0) {
-            setSelectedChat({ ...groups[0], type: 'group' });
-        } else if (type === 'user' && filteredUsers.length > 0) {
+        if (type === 'user' && filteredUsers.length > 0) {
             setSelectedChat(filteredUsers[0]);
+        } else if (type === 'group' && groups.length > 0) {
+            setSelectedChat({ ...groups[0], type: 'group' });
+        }
+    };
+
+    const logCall = async (targetId: string, type: 'voice' | 'video', direction: 'outgoing' | 'incoming') => {
+        if (!user?.$id) return;
+        try {
+            await databases.createDocument(
+                APPWRITE_CONFIG.DATABASE_ID,
+                APPWRITE_CONFIG.COLLECTION_MESSAGES,
+                ID.unique(),
+                {
+                    sender_id: direction === 'outgoing' ? user.$id : targetId,
+                    receiver_id: direction === 'outgoing' ? targetId : user.$id,
+                    type: 'call',
+                    text: type,
+                    timestamp: new Date().toISOString(),
+                    is_group: false
+                }
+            );
+        } catch (e) {
+            console.error("Failed to log call", e);
         }
     };
 
@@ -1906,13 +1933,15 @@ export const Dashboard: React.FC = () => {
                     )}
 
                     {sidebarTab === 'calls' && (
-                        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
-                            <div className="w-16 h-16 bg-indigo-500/10 rounded-full flex items-center justify-center text-indigo-500">
-                                <Phone className="w-8 h-8" />
-                            </div>
-                            <h3 className="text-sm font-bold text-slate-800">No Call History</h3>
-                            <p className="text-xs text-slate-500">Your secure calls are end-to-end encrypted.</p>
-                        </div>
+                        <CallHistory 
+                            user={user} 
+                            onStartCall={(id, type, _name) => {
+                                // Find user object to set as selected chat
+                                const u = networkUsers.find(nu => nu.user_id === id);
+                                if (u) setSelectedChat(u);
+                                handleStartCall(type);
+                            }} 
+                        />
                     )}
                 </div>
 

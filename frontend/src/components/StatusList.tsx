@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Globe, Clock, CheckCircle2, ChevronRight, Loader2 } from 'lucide-react';
-import { databases, APPWRITE_CONFIG } from '../lib/appwrite';
+import { Plus, Globe, Clock, CheckCircle2, ChevronRight, Loader2, MoreVertical, Trash2, X, FileText, Image as ImageIcon, Film } from 'lucide-react';
+import { databases, storage, APPWRITE_CONFIG } from '../lib/appwrite';
 import { Query } from 'appwrite';
 
 interface StatusListProps {
@@ -14,6 +14,8 @@ export const StatusList: React.FC<StatusListProps> = ({ user, onAdd, onView, ref
     const [myStatuses, setMyStatuses] = useState<any[]>([]);
     const [friendStatuses, setFriendStatuses] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [showManage, setShowManage] = useState(false);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
     useEffect(() => {
         fetchStatuses();
@@ -91,6 +93,25 @@ export const StatusList: React.FC<StatusListProps> = ({ user, onAdd, onView, ref
         setIsLoading(false);
     };
 
+    const handleDeleteStatus = async (statusId: string, contentUrl?: string) => {
+        if (!window.confirm("Broadcast Termination: Delete this artifact permanently?")) return;
+        
+        setIsDeleting(statusId);
+        try {
+            if (contentUrl) {
+                await storage.deleteFile(APPWRITE_CONFIG.BUCKET_ID, contentUrl);
+            }
+            await databases.deleteDocument(APPWRITE_CONFIG.DATABASE_ID, "statuses", statusId);
+            await fetchStatuses();
+            if (myStatuses.length <= 1) setShowManage(false);
+        } catch (e) {
+            console.error("Deletion protocol failed", e);
+            alert("Failed to delete status.");
+        } finally {
+            setIsDeleting(null);
+        }
+    };
+
     if (isLoading) return (
         <div className="flex-1 flex items-center justify-center">
             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -131,6 +152,18 @@ export const StatusList: React.FC<StatusListProps> = ({ user, onAdd, onView, ref
                             {myStatuses.length > 0 ? `Active: ${myStatuses.length} Artifacts` : 'Update your status'}
                         </p>
                     </div>
+                    {myStatuses.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowManage(true);
+                            }}
+                            className="p-3 hover:bg-slate-100 rounded-2xl text-slate-400 transition-colors"
+                        >
+                            <MoreVertical className="w-5 h-5" />
+                        </button>
+                    )}
                 </div>
             </section>
 
@@ -183,6 +216,57 @@ export const StatusList: React.FC<StatusListProps> = ({ user, onAdd, onView, ref
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">No artifact history</p>
                  </div>
             </section>
+
+            {/* Manage Status Modal */}
+            {showManage && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowManage(false)} />
+                    <div className="relative w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+                        <header className="p-6 border-b border-slate-100 flex items-center justify-between">
+                            <h3 className="text-lg font-black text-slate-800 italic">Manage Artifacts</h3>
+                            <button onClick={() => setShowManage(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </header>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                            {myStatuses.map((s) => (
+                                <div key={s.$id} className="flex items-center gap-4 p-4 bg-slate-50 rounded-3xl border border-slate-100 group">
+                                    <div className="w-12 h-12 rounded-2xl bg-slate-200 flex items-center justify-center text-slate-400 overflow-hidden shadow-sm">
+                                        {s.type === 'text' ? (
+                                            <div className="w-full h-full flex items-center justify-center text-[8px] font-black uppercase p-1 text-center text-white" style={{ backgroundColor: s.background_color }}>
+                                                TEXT
+                                            </div>
+                                        ) : s.type === 'image' ? (
+                                            <ImageIcon className="w-5 h-5" />
+                                        ) : (
+                                            <Film className="w-5 h-5" />
+                                        )}
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="text-xs font-black text-slate-800 uppercase tracking-tight">
+                                            {s.type} Artifact
+                                        </p>
+                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
+                                            {new Date(s.$createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => handleDeleteStatus(s.$id, s.content_url)}
+                                        disabled={isDeleting === s.$id}
+                                        className="p-3 text-red-400 hover:bg-red-50 rounded-2xl transition-all disabled:opacity-50"
+                                    >
+                                        {isDeleting === s.$id ? (
+                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                        ) : (
+                                            <Trash2 className="w-5 h-5" />
+                                        )}
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
