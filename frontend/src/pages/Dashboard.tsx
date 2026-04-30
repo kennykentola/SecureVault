@@ -1582,7 +1582,8 @@ export const Dashboard: React.FC = () => {
                             const isMismatch = decErr.name === "OperationError" || decErr.message === 'IDENTITY_MISMATCH';
 
                             if (isMismatch) {
-                                flagDirectIdentityIssue();
+                                // We don't flag global repair here because historical messages 
+                                // cannot be recovered by repairing anyway. The placeholder text is enough.
                             }
 
                             return { 
@@ -1607,7 +1608,7 @@ export const Dashboard: React.FC = () => {
                     if (isMismatch && m.is_group) {
                         requestGroupKeySync(m.receiver_id || selectedChat?.$id);
                     } else if (isMismatch) {
-                        flagDirectIdentityIssue();
+                        // Historical DM mismatch - no need to flag global repair
                     }
                     const isMalformed = err.message.includes("Missing ciphertext");
                     
@@ -1832,8 +1833,14 @@ export const Dashboard: React.FC = () => {
                         ))}
                     </div>
                     {(isKeyMismatch || identityRepairReason === 'old_identity_message') && (
-                        <div className="mb-4 p-4 rounded-2xl bg-primary-500/10 border border-primary-500/30 flex flex-col gap-3">
-                            <div className="flex items-start gap-3">
+                        <div className="mb-4 p-4 rounded-2xl bg-primary-500/10 border border-primary-500/30 flex flex-col gap-3 relative group/banner">
+                            <button 
+                                onClick={() => { setIsKeyMismatch(false); setIdentityRepairReason(null); }}
+                                className="absolute top-2 right-2 p-1 hover:bg-white/10 rounded-lg text-slate-500 transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                            <div className="flex items-start gap-3 pr-6">
                                 <ShieldAlert className="w-5 h-5 text-primary-500 shrink-0 mt-0.5" />
                                 <div>
                                     <h4 className="text-sm font-bold text-slate-100">
