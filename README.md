@@ -16,7 +16,7 @@ A high-fidelity, production-ready messaging platform designed with a **Zero-Trus
 ## 🎯 System Overview
 This system implements true **End-to-End Encryption (E2EE)**. Messages are encrypted on the sender's device and can only be decrypted by the intended recipient. Neither the server nor the database admins have access to the plaintext content or the private keys.
 
-![Secure Messaging UI Mockup](C:\Users\dell\Downloads\encripting_message_chat\click_feedback_1776510904380.png)
+![Secure Messaging UI Mockup](click_feedback_1776510904380.png)
 
 ## 🔐 Cryptography Model
 Our security is based on a **Hybrid Cryptography** flow:
@@ -95,7 +95,7 @@ npm run dev
 ```
 
 ### 4. Render Backend Deployment
-This repo now includes a root [render.yaml](/c:/Users/dell/Downloads/encripting_message_chat/render.yaml:1) for the FastAPI backend.
+The repo includes a root [render.yaml](./render.yaml) for the FastAPI backend.
 
 If you are deploying or re-syncing the backend on Render:
 ```bash
