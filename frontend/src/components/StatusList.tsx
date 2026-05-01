@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Globe, Clock, CheckCircle2, ChevronRight, Loader2, MoreVertical, Trash2, X, FileText, Image as ImageIcon, Film } from 'lucide-react';
+import { Plus, Globe, Clock, CheckCircle2, ChevronRight, Loader2, MoreVertical, Trash2, X, Image as ImageIcon, Film } from 'lucide-react';
 import { databases, storage, APPWRITE_CONFIG } from '../lib/appwrite';
 import { Query } from 'appwrite';
 

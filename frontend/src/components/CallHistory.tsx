@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Phone, Video, ArrowUpRight, ArrowDownLeft, PhoneOff, Loader2, Search } from 'lucide-react';
+import { Phone, Video, ArrowUpRight, ArrowDownLeft, Loader2, Search } from 'lucide-react';
 import { databases, APPWRITE_CONFIG } from '../lib/appwrite';
 import { Query } from 'appwrite';
 
