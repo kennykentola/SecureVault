@@ -33,6 +33,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     const [showActionMenu, setShowActionMenu] = React.useState(false);
     const [showSecurityDetails, setShowSecurityDetails] = React.useState(false);
     const [tamperError, setTamperError] = React.useState<string | null>(null);
+    const [voicePlayRequested, setVoicePlayRequested] = React.useState(false);
     const bubbleRef = React.useRef<HTMLDivElement>(null);
     const audioRef = React.useRef<HTMLAudioElement>(null);
     const longPressTimerRef = React.useRef<number | null>(null);
@@ -43,6 +44,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     const durationLabel = msg.duration || msg.mediaData?.duration;
     const rawKeyBase64 = msg.decryptedKeyBase64 || msg.mediaData?.decryptedKeyBase64;
     const localFile = msg.localFile instanceof File ? msg.localFile : null;
+    const isCoarsePointer = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
     const originalMimeType = msg.originalMimeType || msg.original_mime_type || msg.mediaData?.originalMimeType || msg.mediaData?.original_mime_type || localFile?.type;
     const isPreviewable = originalMimeType?.startsWith('image/') || originalMimeType?.startsWith('video/');
 
@@ -109,6 +111,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         }
     }, []);
 
+    React.useEffect(() => {
+        if (!decryptedUrl || mediaType !== 'voice' || !voicePlayRequested) return;
+
+        const timer = window.setTimeout(() => {
+            playAudio().finally(() => {
+                setVoicePlayRequested(false);
+            });
+        }, 0);
+
+        return () => window.clearTimeout(timer);
+    }, [decryptedUrl, mediaType, voicePlayRequested, playAudio]);
+
     const handleMediaAction = async () => {
         if (decryptedUrl) {
             if (mediaType === 'voice') {
@@ -131,9 +145,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             const localUrl = URL.createObjectURL(localFile);
             setDecryptedUrl(localUrl);
             if (mediaType === 'voice') {
-                setTimeout(() => {
-                    playAudio().catch(() => {});
-                }, 100);
+                setVoicePlayRequested(true);
             } else {
                 const link = document.createElement('a');
                 link.href = localUrl;
@@ -169,9 +181,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             setDecryptedUrl(url);
 
             if (mediaType === 'voice') {
-                setTimeout(() => {
-                    playAudio().catch(() => {});
-                }, 100);
+                setVoicePlayRequested(true);
             } else if (!isPreviewable) {
                 setTimeout(() => {
                     const link = document.createElement('a');
@@ -264,14 +274,25 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                                     </div>
                                 </div>
                                 {decryptedUrl && (
-                                    <audio 
-                                        ref={audioRef} 
-                                        src={decryptedUrl} 
-                                        onEnded={() => setIsPlaying(false)}
-                                        playsInline
-                                        preload="auto"
-                                        className="hidden"
-                                    />
+                                    <>
+                                        <audio 
+                                            ref={audioRef} 
+                                            src={decryptedUrl} 
+                                            onEnded={() => setIsPlaying(false)}
+                                            onPlay={() => setIsPlaying(true)}
+                                            onPause={() => setIsPlaying(false)}
+                                            playsInline
+                                            preload="auto"
+                                            controls={isCoarsePointer}
+                                            controlsList="nodownload noplaybackrate"
+                                            className={`w-full mt-2 ${isCoarsePointer ? '' : 'hidden'}`}
+                                        />
+                                        {isCoarsePointer && (
+                                            <p className={`text-[9px] font-black uppercase tracking-widest mt-1.5 ${isOwn ? 'text-blue-100' : 'text-slate-500'}`}>
+                                                Tap play if audio does not start automatically
+                                            </p>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         ) : msg.type === 'file' ? (

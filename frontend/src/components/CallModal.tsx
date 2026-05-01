@@ -195,7 +195,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                         </div>
                     </div>
 
-                    <div className="flex-1 flex items-center justify-center px-4 sm:px-8 pb-6 pt-2">
+                    <div className="flex-1 flex items-center justify-center px-4 sm:px-8 pb-28 lg:pb-6 pt-2">
                         <AnimatePresence mode="wait">
                             {callState.isIncoming && (
                                 <motion.div
@@ -283,7 +283,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                     className="w-full max-w-6xl"
                                 >
                                     <div className="grid gap-4 lg:grid-cols-[1fr_auto] items-stretch">
-                                        <div className={`relative rounded-[2rem] overflow-hidden border border-white/10 bg-black shadow-[0_30px_80px_rgba(0,0,0,0.45)] ${callState.callType === 'video' ? 'min-h-[56vh] lg:min-h-[70vh]' : 'min-h-[46vh] lg:min-h-[62vh]'}`}>
+                                        <div className={`relative rounded-[2rem] overflow-hidden border border-white/10 bg-black shadow-[0_30px_80px_rgba(0,0,0,0.45)] ${callState.callType === 'video' ? 'min-h-[52vh] lg:min-h-[70vh]' : 'min-h-[42vh] lg:min-h-[62vh]'}`}>
                                             {hasRemoteVideo ? (
                                                 <video
                                                     ref={remoteVideoRef}
@@ -356,7 +356,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                             )}
                                         </div>
 
-                                        <div className="lg:w-72 rounded-[2rem] border border-white/10 bg-white/5 backdrop-blur-2xl p-4 sm:p-5 flex flex-row lg:flex-col items-center lg:items-stretch gap-3 lg:gap-4">
+                                        <div className="fixed bottom-0 left-0 right-0 z-[125] lg:static lg:w-72 rounded-t-[2rem] lg:rounded-[2rem] border-t lg:border border-white/10 bg-slate-950/90 lg:bg-white/5 backdrop-blur-2xl p-4 sm:p-5 flex flex-row lg:flex-col items-center lg:items-stretch gap-3 lg:gap-4 pb-[calc(1rem+env(safe-area-inset-bottom))] lg:pb-5 shadow-[0_-16px_40px_rgba(0,0,0,0.35)] lg:shadow-none">
                                             <div className="flex-1 min-w-0 text-left lg:text-center">
                                                 <p className="text-[10px] font-black uppercase tracking-[0.28em] text-slate-400">Call Controls</p>
                                                 <h4 className="mt-1 text-lg font-bold truncate">Manage audio and video</h4>
@@ -398,7 +398,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
 
                                                 <button
                                                     onClick={onEnd}
-                                                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-red-500 hover:bg-red-600 text-white border border-red-400/20 transition-colors flex items-center justify-center shadow-lg shadow-red-500/20"
+                                                    className="w-14 h-14 sm:w-14 sm:h-14 rounded-full bg-red-500 hover:bg-red-600 text-white border border-red-400/20 transition-colors flex items-center justify-center shadow-lg shadow-red-500/20"
                                                     aria-label="End call"
                                                 >
                                                     <PhoneOff className="w-5 h-5" />
