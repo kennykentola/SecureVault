@@ -11,6 +11,7 @@ export interface CallState {
     remoteStream: MediaStream | null;
     localStream: MediaStream | null;
     caller: string | null;
+    callerName: string | null;
     callType: 'voice' | 'video';
 }
 
@@ -21,10 +22,11 @@ const INITIAL_CALL_STATE: CallState = {
     remoteStream: null,
     localStream: null,
     caller: null,
+    callerName: null,
     callType: 'voice'
 };
 
-export const useWebRTC = (userId: string | undefined) => {
+export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (userId: string | null | undefined) => string | null | undefined) => {
     const [peer, setPeer] = useState<Peer | null>(null);
     const [callState, setCallState] = useState<CallState>(INITIAL_CALL_STATE);
 
@@ -116,6 +118,7 @@ export const useWebRTC = (userId: string | undefined) => {
                     ...prev,
                     isIncoming: true,
                     caller: call.peer,
+                    callerName: resolveDisplayName?.(call.peer) || call.peer,
                     callType
                 }));
                 call.on('error', (err: any) => {
@@ -191,6 +194,7 @@ export const useWebRTC = (userId: string | undefined) => {
                 isOutgoing: true,
                 localStream: stream,
                 caller: remoteId,
+                callerName: resolveDisplayName?.(remoteId) || remoteId,
                 callType: type
             }));
 

@@ -264,7 +264,20 @@ export const Dashboard: React.FC = () => {
     }, [selectedChat]);
     const selectedChatMuteId = selectedChat ? (getChatTargetId(selectedChat) || selectedChat.$id) : null;
     // Voice uploading state tracked
-    const { callState, startCall, answerCall, endCall } = useWebRTC(user?.$id);
+    const resolveCallDisplayName = React.useCallback((userId: string | null | undefined) => {
+        if (!userId) return null;
+        if (userId === user?.$id) return user?.name || user?.email || 'You';
+
+        const directMatch = networkUsers.find((u) => (u.user_id || u.$id) === userId);
+        if (directMatch) return directMatch.username || directMatch.name || directMatch.email || userId;
+
+        const selectedMatch = selectedChat && (selectedChat.user_id === userId || selectedChat.$id === userId);
+        if (selectedMatch) return selectedChat.username || selectedChat.name || selectedChat.email || userId;
+
+        return userId;
+    }, [networkUsers, selectedChat, user?.email, user?.name, user?.$id]);
+
+    const { callState, startCall, answerCall, endCall } = useWebRTC(user?.$id, resolveCallDisplayName);
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const { status: wsStatus, sendMessage } = useWebSocket(user?.$id, (msg) => {

@@ -71,6 +71,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
+    const displayName = callState.callerName || callState.caller || 'Encrypted Peer';
     const primaryLabel = callState.isIncoming
         ? 'Incoming Call'
         : callState.isOutgoing
@@ -84,6 +85,8 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
             : callState.isActive
                 ? 'Encrypted'
                 : '';
+    const hasRemoteVideo = callState.callType === 'video' && !!callState.remoteStream;
+    const hasLocalVideo = callState.callType === 'video' && !!callState.localStream;
 
     const handleSwipeDismiss = (_event: any, info: { offset: { y: number }, velocity: { y: number } }) => {
         const shouldDismiss = info.offset.y > 120 || info.velocity.y > 900;
@@ -163,7 +166,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                     {primaryLabel}
                                 </p>
                                 <h3 className="text-lg sm:text-xl font-bold tracking-tight truncate">
-                                    {callState.caller || 'Encrypted Peer'}
+                                    {displayName}
                                 </h3>
                                 <div className="flex items-center gap-2 text-[11px] text-slate-300 mt-1">
                                     <Users className="w-3.5 h-3.5" />
@@ -209,7 +212,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                         </div>
                                     </div>
                                     <h2 className="mt-6 text-3xl sm:text-4xl font-black tracking-tight">
-                                        {callState.caller || 'Encrypted Peer'}
+                                        {displayName}
                                     </h2>
                                     <p className="mt-2 text-sm sm:text-base text-slate-300">
                                         Incoming {callState.callType} call. Swipe down to dismiss or tap decline to ignore.
@@ -252,7 +255,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                         </div>
                                     </div>
                                     <h2 className="mt-6 text-3xl sm:text-4xl font-black tracking-tight">
-                                        Calling {callState.caller || 'Encrypted Peer'}
+                                        Calling {displayName}
                                     </h2>
                                     <p className="mt-2 text-sm sm:text-base text-slate-300">
                                         Secure {callState.callType} call in progress.
@@ -281,7 +284,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                 >
                                     <div className="grid gap-4 lg:grid-cols-[1fr_auto] items-stretch">
                                         <div className={`relative rounded-[2rem] overflow-hidden border border-white/10 bg-black shadow-[0_30px_80px_rgba(0,0,0,0.45)] ${callState.callType === 'video' ? 'min-h-[56vh] lg:min-h-[70vh]' : 'min-h-[46vh] lg:min-h-[62vh]'}`}>
-                                            {callState.callType === 'video' && callState.remoteStream ? (
+                                            {hasRemoteVideo ? (
                                                 <video
                                                     ref={remoteVideoRef}
                                                     autoPlay
@@ -289,22 +292,48 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                                     className="absolute inset-0 w-full h-full object-cover"
                                                 />
                                             ) : (
-                                                <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-                                                    <div className="w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-linear-to-br from-cyan-500 via-primary-600 to-emerald-400 p-[2px] shadow-2xl shadow-cyan-500/20">
-                                                        <div className="w-full h-full rounded-full bg-slate-950 flex items-center justify-center">
-                                                            {callState.callType === 'video' ? <Video className="w-16 h-16 sm:w-20 sm:h-20 text-white" /> : <Mic className="w-16 h-16 sm:w-20 sm:h-20 text-white" />}
-                                                        </div>
+                                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.16),transparent_30%),radial-gradient(circle_at_center,rgba(16,185,129,0.12),transparent_24%),linear-gradient(180deg,rgba(2,6,23,0.9),rgba(15,23,42,0.98))]">
+                                                    <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+                                                        {callState.callType === 'video' && (
+                                                            <div className="relative mb-5 w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-white/6 border border-white/10 flex items-center justify-center shadow-2xl shadow-cyan-500/10">
+                                                                <RingPulse />
+                                                                <div className="relative z-10 w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-linear-to-tr from-primary-600 via-cyan-500 to-emerald-400 flex items-center justify-center">
+                                                                    <Video className="w-12 h-12 sm:w-14 sm:h-14 text-white" />
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        <h2 className="text-3xl sm:text-4xl font-black tracking-tight">
+                                                            {displayName}
+                                                        </h2>
+                                                        <p className="mt-2 text-sm sm:text-base text-slate-300 max-w-md">
+                                                            Waiting for the video feed. If the screen stays dark, the other side may have video off or permissions blocked.
+                                                        </p>
+                                                        {hasLocalVideo && (
+                                                            <div className="mt-6 relative w-full max-w-sm aspect-video bg-black/60 backdrop-blur-md rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
+                                                                <video
+                                                                    ref={localVideoRef}
+                                                                    autoPlay
+                                                                    playsInline
+                                                                    muted
+                                                                    className={`w-full h-full object-cover scale-x-[-1] ${cameraOff ? 'opacity-0' : 'opacity-100'}`}
+                                                                />
+                                                                {!cameraOff && (
+                                                                    <div className="absolute bottom-1.5 left-1.5 px-2 py-0.5 bg-black/40 rounded-lg text-[9px] font-black uppercase tracking-widest">
+                                                                        You
+                                                                    </div>
+                                                                )}
+                                                                {cameraOff && (
+                                                                    <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+                                                                        <VideoOff className="w-5 h-5 text-white/80" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <h2 className="mt-6 text-3xl sm:text-4xl font-black tracking-tight">
-                                                        {callState.caller || 'Encrypted Peer'}
-                                                    </h2>
-                                                    <p className="mt-2 text-sm sm:text-base text-slate-300 max-w-md">
-                                                        Your call is protected with end-to-end encryption.
-                                                    </p>
                                                 </div>
                                             )}
 
-                                            {callState.callType === 'video' && (
+                                            {hasRemoteVideo && (
                                                 <div className="absolute top-4 right-4 sm:top-5 sm:right-5 w-24 sm:w-32 aspect-video bg-black/60 backdrop-blur-md rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
                                                     <video
                                                         ref={localVideoRef}
