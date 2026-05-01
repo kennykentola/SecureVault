@@ -1,0 +1,113 @@
+CHAPTER FOUR
+RESULTS AND CONCLUSIONS
+
+4.1 System Implementation
+The primary objective of this project was to develop SecureVault, a secure end-to-end encrypted messaging application that protects user conversations, media, and account data through a zero-trust architecture. The implementation was successfully completed and the core functions identified during the design phase were delivered in the final system. Users can register, log in, unlock their local vault with a PIN, and communicate through encrypted chat with minimal friction, demonstrating that the application is both functional and usable.
+
+The system is built with a React frontend, a FastAPI backend, and Appwrite for authentication, storage, and database services. Security-sensitive operations are performed on the client side wherever possible. This design ensures that plaintext content and private keys remain under the control of the user rather than the server.
+
+Key functionalities include:
+1. User Authentication: The application supports email/password login, phone authentication, and Google sign-in through Appwrite.
+2. Secure Vault Setup and Unlocking: Each user can create a local encryption vault protected by a PIN. The private key is stored in the browser's IndexedDB and can only be restored with the correct PIN.
+3. Hybrid Encryption: Messages are encrypted with AES-256-CBC for speed, while AES session keys are wrapped with RSA-OAEP using the recipient's public key.
+4. Integrity Verification: SHA-256 hashes are generated for encrypted message payloads to detect tampering or corruption.
+5. Encrypted Media Sharing: Voice notes and file attachments are encrypted with AES-GCM before being uploaded.
+6. Real-Time Messaging: WebSocket communication supports instant delivery, typing indicators, read receipts, delivery updates, reactions, replies, and message edits.
+7. Group Messaging: The system supports group chats with encrypted group key handling and membership synchronization.
+8. Voice and Video Calls: WebRTC-based voice and video calling is available for one-to-one conversations.
+9. Status Updates: Users can post and view status updates, similar to a short-lived social feed.
+10. Security and Moderation Tools: An admin dashboard allows moderation actions such as blocking or deleting users and viewing reports.
+
+Implementation Challenges and Resolutions:
+1. Key Persistence and Recovery: Since private keys must remain local to the browser, the system needed a reliable recovery approach. This was addressed by adding encrypted vault backups and a recovery key flow so that users can regain access after resetting or changing devices.
+2. Identity Mismatch Handling: In encrypted systems, users may receive messages encrypted for an older vault. The application now detects identity mismatches and provides repair prompts so users can resynchronize their public keys.
+3. Encrypted Media Handling: File uploads and voice notes required special handling because encrypted blobs do not behave like ordinary files. The upload flow was adapted to preserve compatibility with Appwrite storage rules while still keeping the content encrypted.
+4. Group Key Synchronization: Group messaging introduced extra complexity because members may join at different times. The implementation includes key sync requests and fallback handling for legacy group memberships.
+5. Browser Compatibility: Because cryptographic operations run in the browser, the system was tested with Web Crypto API behavior in mind to ensure consistent operation across modern browsers.
+
+4.1.1 User Interface
+
+Figure 4.1.1: Registration and login page with authentication options.
+
+Figure 4.1.2: PIN vault unlock screen for secure local key access.
+
+Figure 4.1.3: Main dashboard showing chats, updates, calls, and security controls.
+
+Figure 4.1.4: One-to-one encrypted chat interface with message composer and status indicators.
+
+Figure 4.1.5: Group chat and member management interface.
+
+Figure 4.1.6: Voice and video call modal.
+
+Figure 4.1.7: Security dashboard showing encryption status and key recovery tools.
+
+Figure 4.1.8: Admin command center with user moderation and report management.
+
+4.2 Performance Evaluation
+Performance evaluation focused on the responsiveness of encryption, decryption, session handling, and real-time communication. The application uses hybrid cryptography, which is a practical design because RSA is used only for key exchange while AES handles the bulk of the data encryption. This reduces computational overhead and improves speed during message sending and receiving.
+
+During local testing, the application remained responsive while processing encrypted chat messages, voice notes, and file attachments. The user interface updated smoothly when switching between chats, groups, statuses, and calls. The WebSocket-based message flow also delivered messages with low visible delay in ordinary use.
+
+To provide concrete performance data, a local benchmark was run using Node.js native crypto with the same algorithm family used by the system. The test measured RSA-2048 OAEP wrapping, AES-256-CBC encryption and decryption, and SHA-256 hashing across message sizes of 100, 1,000, 5,000, and 10,000 characters.
+
+Observed performance characteristics:
+1. Message Encryption: AES-based encryption completed in well under 0.1 ms on average for the tested message sizes.
+2. Message Decryption: AES decryption remained similarly fast, staying below 0.06 ms on average.
+3. Key Exchange: RSA-OAEP wrapping was fast, while RSA-OAEP unwrapping averaged about 1.7 to 1.9 ms per operation.
+4. Hash Verification: SHA-256 hashing remained extremely lightweight, averaging less than 0.08 ms even at the largest tested size.
+5. Session Handling: Vault unlock and restore operations were responsive once the correct PIN or recovery key was provided.
+6. UI Responsiveness: Tabs, modals, and side panels remained interactive while background decryption and synchronization tasks were running.
+
+Table 4.1: Average cryptographic timings from the local benchmark.
+Component                     100 chars   1,000 chars   5,000 chars   10,000 chars
+RSA Enc (ms)                  0.0856      0.1750        0.0952        0.1010
+RSA Dec (ms)                  1.9086      1.8352        1.8500        1.7035
+AES Enc (ms)                  0.0257      0.0236        0.0436        0.0612
+AES Dec (ms)                  0.0232      0.0209        0.0410        0.0531
+SHA-256 (ms)                  0.0079      0.0118        0.0368        0.0712
+
+The results indicate that the system is suitable for everyday encrypted messaging. Because the architecture avoids encrypting large payloads directly with RSA, the implementation remains efficient while still preserving strong security properties.
+
+4.3 Security Analysis
+The security features of SecureVault were evaluated based on encryption strength, local key protection, authentication design, and resistance to common attack scenarios.
+
+Encryption Strength
+1. Messages are encrypted using AES-256-CBC, which provides strong symmetric encryption when implemented with random initialization vectors and integrity verification.
+2. Session keys are wrapped with RSA-OAEP using SHA-256, which protects the exchange of secret keys between users.
+3. SHA-256 hashing is used to verify message integrity and detect tampering.
+
+Key Management
+1. Private keys are generated locally and stored in IndexedDB rather than being exposed to the server.
+2. Access to private keys is protected by a user-defined PIN.
+3. The system includes encrypted vault backups and recovery keys to support account restoration.
+4. Legacy vault support helps preserve access to older encrypted identities when users have changed keys over time.
+
+Authentication and Access Control
+1. Appwrite handles user authentication, reducing the need to build a custom authentication system from scratch.
+2. The application supports multiple login methods, improving usability while maintaining account-based access control.
+3. The admin dashboard is separated from the normal user workflow and is intended for moderation and oversight.
+
+Potential Vulnerabilities
+1. PIN Weakness: If a weak PIN is chosen, the local vault could become easier to compromise.
+2. Browser Dependence: Since private keys are stored locally, clearing browser data can remove access unless recovery is available.
+3. Identity Drift: When a user resets their vault, older encrypted messages may remain unreadable without legacy key support.
+4. Network Exposure: The application still depends on secure transport and correct backend configuration to protect metadata and session traffic.
+
+Overall, the security design follows the principles of zero trust and end-to-end encryption. The server stores encrypted content and user records, but it does not need access to plaintext messages or private keys.
+
+4.4 Limitations of the System
+Although SecureVault provides strong protection for private communication, the system still has some limitations:
+1. Scalability: Large-scale deployments may require additional optimization for media handling, key synchronization, and database growth.
+2. Device Dependence: Since private keys are stored locally, users must retain access to the same browser environment or use the recovery flow.
+3. Metadata Exposure: As with most messaging systems, some metadata such as sender, receiver, timestamp, and message type still exists in the backend.
+4. Browser Constraints: Cryptographic performance and storage behavior can vary across browsers and devices.
+5. Administrative Trust: The admin dashboard can moderate the system, but it also introduces privileged access that must be strictly protected.
+
+4.5 Conclusions
+This project successfully delivered SecureVault, a secure end-to-end encrypted messaging platform that combines modern web technologies with practical cryptographic design. The system integrates AES-256-CBC for message confidentiality, RSA-OAEP for secure key exchange, SHA-256 for integrity verification, and PIN-protected local key storage for vault security.
+
+The results show that the application supports encrypted chat, group messaging, voice and video calls, file sharing, status updates, and administrative moderation within a single unified platform. More importantly, the design ensures that private keys remain under user control and that plaintext data is not exposed to the server.
+
+The project demonstrates that strong security can be combined with a clean and responsive user experience. It also shows the importance of key recovery, identity synchronization, and careful media handling in a real-world encrypted messaging application.
+
+In summary, SecureVault provides a practical implementation of zero-trust communication for modern web users. Future improvements may include stronger audit logging, advanced mobile support, more detailed performance benchmarking, and further optimization of encrypted media workflows.
