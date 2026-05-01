@@ -4,10 +4,12 @@ import { Query } from 'appwrite';
 import { 
     X, Users, Image as ImageIcon, FileText, Link as LinkIcon, 
     Settings, Shield, UserPlus, UserMinus, LogOut, Flag,
-    Edit3, Save, Loader2, Camera, Trash2
+    Edit3, Save, Loader2, Camera, Trash2, RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { KeyManager } from '../crypto/keyManager';
+import { HybridEncryptor } from '../crypto/encryptor';
 
 interface GroupDetailViewProps {
     isOpen: boolean;
@@ -30,6 +32,7 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({ isOpen, onClos
     const [membersCanAdd, setMembersCanAdd] = useState(group.members_can_add !== false);
     const [myRole, setMyRole] = useState<'admin' | 'member'>('member');
     const [privacyControlsUnavailable, setPrivacyControlsUnavailable] = useState(false);
+    const [isRotatingKeys, setIsRotatingKeys] = useState(false);
 
     const isUnknownAttributeError = (error: any) =>
         typeof error?.message === 'string' && error.message.includes("Unknown attribute");
@@ -153,6 +156,51 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({ isOpen, onClos
             });
             fetchMembers();
         } catch (e) { console.error(e); }
+    };
+
+    const handleRotateGroupKey = async () => {
+        if (myRole !== 'admin') return;
+        if (!window.confirm("Generate a fresh group key for all current members? Older encrypted messages will still need the old key copy.")) return;
+
+        setIsRotatingKeys(true);
+        try {
+            const localPubKey = await KeyManager.getPublicKey();
+            const [membersRes, usersRes] = await Promise.all([
+                databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "group_members", [
+                    Query.equal("group_id", group.$id)
+                ]),
+                databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, APPWRITE_CONFIG.COLLECTION_USERS, [
+                    Query.limit(100)
+                ])
+            ]);
+
+            const freshAesKey = crypto.getRandomValues(new Uint8Array(32));
+            const freshKeyString = btoa(String.fromCharCode(...freshAesKey));
+            const memberByUserId = new Map(usersRes.documents.map((profile) => [profile.user_id, profile]));
+
+            const updates = membersRes.documents.map(async (membership) => {
+                const profile = memberByUserId.get(membership.user_id);
+                const publicKeyStr = membership.user_id === user?.$id
+                    ? (localPubKey || profile?.public_key || profile?.publicKey)
+                    : (profile?.public_key || profile?.publicKey);
+                if (!publicKeyStr) return null;
+
+                const pubKey = await KeyManager.importPublicKey(publicKeyStr);
+                const encrypted_group_key = await HybridEncryptor.encryptKeyWithRSA(freshKeyString, pubKey);
+                return databases.updateDocument(APPWRITE_CONFIG.DATABASE_ID, "group_members", membership.$id, {
+                    encrypted_group_key
+                });
+            });
+
+            await Promise.allSettled(updates);
+            await fetchMembers();
+            onUpdate();
+            alert("A fresh group key has been distributed to members with valid public keys.");
+        } catch (e) {
+            console.error("Failed to rotate group key", e);
+            alert("Unable to rotate the group key right now.");
+        }
+        setIsRotatingKeys(false);
     };
 
     const getAvatarUrl = (id: string | null | undefined) => {
@@ -422,6 +470,17 @@ export const GroupDetailView: React.FC<GroupDetailViewProps> = ({ isOpen, onClos
 
                                         <section className="space-y-4">
                                             <h5 className="text-[10px] font-black uppercase tracking-widest text-red-400 ml-1">Terminal Actions</h5>
+                                            <button
+                                                onClick={handleRotateGroupKey}
+                                                disabled={isRotatingKeys}
+                                                className="w-full flex items-center gap-4 p-5 bg-indigo-50 text-indigo-700 rounded-2xl hover:bg-indigo-100 transition-all border border-indigo-100 group disabled:opacity-60"
+                                            >
+                                                <RefreshCw className={`w-5 h-5 ${isRotatingKeys ? 'animate-spin' : 'group-hover:rotate-45 transition-transform'}`} />
+                                                <div className="flex-1 text-left">
+                                                    <p className="text-xs font-black uppercase tracking-widest">Rotate Group Key</p>
+                                                    <p className="text-[8px] font-bold uppercase tracking-widest mt-1">Re-share a fresh key to current members</p>
+                                                </div>
+                                            </button>
                                             <button 
                                                 onClick={async () => {
                                                     if (window.confirm("CRITICAL: This will permanently dissolve the channel and delete all artifacts. Proceed?")) {

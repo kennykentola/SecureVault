@@ -12,15 +12,17 @@ interface AddMemberModalProps {
     onClose: () => void;
     group: any;
     onAdded: () => void;
+    onRequestKeySync?: (groupId: string) => Promise<void> | void;
 }
 
-export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose, group, onAdded }) => {
+export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose, group, onAdded, onRequestKeySync }) => {
     const { user, privateKey, legacyPrivateKeys } = useAuth();
     const [searchQuery, setSearchQuery] = useState("");
     const [availableUsers, setAvailableUsers] = useState<any[]>([]);
     const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
+    const [myRole, setMyRole] = useState<'admin' | 'member'>('member');
     const availablePrivateKeys = [privateKey, ...legacyPrivateKeys].filter((key): key is CryptoKey => !!key);
 
     useEffect(() => {
@@ -43,6 +45,8 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose,
                 Query.equal("group_id", group.$id)
             ]);
             const memberIds = membersRes.documents.map(m => m.user_id);
+            const myMembership = membersRes.documents.find(m => m.user_id === user?.$id);
+            if (myMembership?.role) setMyRole(myMembership.role === 'admin' ? 'admin' : 'member');
             
             setAvailableUsers(res.documents.filter(u => u.user_id !== user?.$id && !memberIds.includes(u.user_id)));
         } catch (e) { console.error(e); }
@@ -59,6 +63,10 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose,
         if (selectedUsers.length === 0 || !availablePrivateKeys.length) return;
         setIsAdding(true);
         try {
+            if (group.members_can_add === false && myRole !== 'admin') {
+                throw new Error("Only group administrators can add new members in this channel.");
+            }
+
             // 1. Decrypt the group AES key from my own membership record
             const myMembershipRes = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "group_members", [
                 Query.and([
@@ -95,14 +103,49 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose,
                     membershipId: myMembershipRes.documents[0].$id,
                     hasPrivateKey: availablePrivateKeys.length > 0
                 });
+
+                if (typeof onRequestKeySync === 'function') {
+                    try {
+                        await onRequestKeySync(group.$id);
+                        await new Promise(resolve => setTimeout(resolve, 1800));
+                        const refreshedMembership = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, "group_members", [
+                            Query.and([
+                                Query.equal("group_id", group.$id),
+                                Query.equal("user_id", user?.$id)
+                            ])
+                        ]);
+                        if (refreshedMembership.total > 0) {
+                            const refreshedKey = refreshedMembership.documents[0].encrypted_group_key;
+                            if (refreshedKey) {
+                                let repairedKey: string | null = null;
+                                for (const candidateKey of availablePrivateKeys) {
+                                    try {
+                                        repairedKey = await HybridEncryptor.decryptKeyWithRSA(refreshedKey, candidateKey);
+                                        break;
+                                    } catch {
+                                        continue;
+                                    }
+                                }
+                                if (repairedKey) {
+                                    rawAesKeyB64 = repairedKey;
+                                    console.log("[AddMember] Recovered a fresh copy of the group key after sync request.");
+                                }
+                            }
+                        }
+                    } catch (syncErr) {
+                        console.error("[AddMember] Key sync retry failed:", syncErr);
+                    }
+                }
+
+                if (!rawAesKeyB64) {
+                    const isMismatch = decErr.name === "OperationError" || decErr.message.includes("mismatch") || decErr.message.includes("unlock");
+                    const userMessage = isMismatch 
+                        ? "Your current vault cannot decrypt this group's key yet. If another admin or member still has access, they can repair the key and you can try again."
+                        : `Unable to unlock the group key. (${decErr.message})`;
+                    throw new Error(userMessage);
+                }
                 
-                const isMismatch = decErr.name === "OperationError" || decErr.message.includes("mismatch") || decErr.message.includes("unlock");
-                
-                const userMessage = isMismatch 
-                    ? "Security Vault Mismatch: Your current vault cannot decrypt this group's membership key. Repairing your cloud identity only affects future encryption. Another admin with valid access must re-add you to this group, or the group must be recreated."
-                    : `Security Error: Unable to unlock group vault. (${decErr.message})`;
-                    
-                throw new Error(userMessage);
+                console.log("[AddMember] Continuing after successful key repair.");
             }
             
             // 2. Encrypt and add each new member

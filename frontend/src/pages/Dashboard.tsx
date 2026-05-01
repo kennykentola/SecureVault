@@ -151,15 +151,15 @@ export const Dashboard: React.FC = () => {
     const flagDirectIdentityIssue = () => {
         setIdentityRepairReason(prev => prev === 'cloud_mismatch' ? prev : 'old_identity_message');
     };
-    const requestGroupKeySync = (groupId?: string) => {
-        if (!groupId) return false;
+    const requestGroupKeySync = async (groupId?: string): Promise<void> => {
+        if (!groupId) return;
 
         const now = Date.now();
         const lastRequestAt = syncRequests.current.get(groupId) || 0;
         const cooldownMs = 15000;
 
         if (now - lastRequestAt < cooldownMs) {
-            return false;
+            return;
         }
 
         syncRequests.current.set(groupId, now);
@@ -169,7 +169,6 @@ export const Dashboard: React.FC = () => {
             requesterId: user?.$id,
             username: user?.name
         });
-        return true;
     };
 
     const formatDuration = (seconds: number) => {
@@ -1344,7 +1343,16 @@ export const Dashboard: React.FC = () => {
             let encryptedKeyPayload;
             if (selectedChat.type === 'group') {
                 const activeGroup = getResolvedGroupChat(selectedChat);
-                const groupKey = await decryptGroupKeyForChat(activeGroup);
+                let groupKey;
+                try {
+                    groupKey = await decryptGroupKeyForChat(activeGroup);
+                } catch (groupKeyError: any) {
+                    console.error("Group key decrypt failed", groupKeyError);
+                    requestGroupKeySync(chatTargetId);
+                    throw new Error(
+                        "This group key is not available on your current vault. Unlock the correct vault or wait for the group key to resync."
+                    );
+                }
                 encryptedKeyPayload = await HybridEncryptor.encryptSymmetric(rawFileKeyB64, groupKey);
             } else {
                 const recipientPublicKeyStr = selectedChat.public_key || selectedChat.publicKey;
@@ -1408,7 +1416,11 @@ export const Dashboard: React.FC = () => {
 
         } catch (e) {
             console.error("Media upload failed", e);
-            alert(getMediaUploadErrorMessage(e, type));
+            if (e instanceof Error && e.message.includes("group key")) {
+                alert(e.message);
+            } else {
+                alert(getMediaUploadErrorMessage(e, type));
+            }
         } finally {
             setIsVoiceUploading(false);
         }
@@ -2536,7 +2548,8 @@ export const Dashboard: React.FC = () => {
                         isOpen={showAddMember} 
                         onClose={() => setShowAddMember(false)} 
                         group={selectedChat} 
-                        onAdded={fetchMyGroups} 
+                        onAdded={fetchMyGroups}
+                        onRequestKeySync={requestGroupKeySync}
                     />
                 </>
             )}

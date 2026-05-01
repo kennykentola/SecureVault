@@ -23,6 +23,7 @@ export const CreateGroupWizard: React.FC<CreateGroupWizardProps> = ({ isOpen, on
   const [groupDesc, setGroupDesc] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [membersCanAdd, setMembersCanAdd] = useState(true);
 
   useEffect(() => {
     if (isOpen) {
@@ -30,6 +31,8 @@ export const CreateGroupWizard: React.FC<CreateGroupWizardProps> = ({ isOpen, on
       setStep(1);
       setSelectedUsers([]);
       setGroupName("");
+      setGroupDesc("");
+      setMembersCanAdd(true);
     }
   }, [isOpen]);
 
@@ -53,6 +56,9 @@ export const CreateGroupWizard: React.FC<CreateGroupWizardProps> = ({ isOpen, on
     (u.email || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const isUnknownAttributeError = (error: any) =>
+    typeof error?.message === 'string' && error.message.includes("Unknown attribute");
+
   const handleCreateGroup = async () => {
     if (!groupName.trim()) return;
     setIsCreating(true);
@@ -65,12 +71,28 @@ export const CreateGroupWizard: React.FC<CreateGroupWizardProps> = ({ isOpen, on
         const groupId = ID.unique();
         
         // 1. Create Group Entry
-        await databases.createDocument(APPWRITE_CONFIG.DATABASE_ID, "groups", groupId, {
+        const groupPayload = {
             group_id: groupId,
             name: groupName,
             description: groupDesc,
-            created_by: user?.$id
-        });
+            created_by: user?.$id,
+            is_admin_only: false,
+            members_can_add: membersCanAdd
+        };
+
+        try {
+            await databases.createDocument(APPWRITE_CONFIG.DATABASE_ID, "groups", groupId, groupPayload);
+        } catch (groupErr: any) {
+            if (!isUnknownAttributeError(groupErr)) throw groupErr;
+            console.warn("Group privacy attributes are not available yet. Retrying with base group fields only.");
+            await databases.createDocument(APPWRITE_CONFIG.DATABASE_ID, "groups", groupId, {
+                group_id: groupId,
+                name: groupName,
+                description: groupDesc,
+                created_by: user?.$id
+            });
+            alert("This server does not support group permission attributes yet. The group was created, but add-member permissions will use the server default until the schema is updated.");
+        }
 
         // 2. Generate Group Secret Key (32 bytes AES)
         const aesKey = crypto.getRandomValues(new Uint8Array(32));
@@ -220,6 +242,27 @@ export const CreateGroupWizard: React.FC<CreateGroupWizardProps> = ({ isOpen, on
                             onChange={(e) => setGroupDesc(e.target.value)}
                         />
                     </div>
+                    <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-600 ml-1">Who can add new members?</label>
+                        <div className="grid gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setMembersCanAdd(false)}
+                                className={`w-full rounded-2xl border p-4 text-left transition-all ${!membersCanAdd ? 'bg-primary-500/10 border-primary-500/30 text-white' : 'bg-white/3 border-white/10 text-slate-400 hover:bg-white/5'}`}
+                            >
+                                <div className="text-sm font-black">Admins only</div>
+                                <div className="mt-1 text-[10px] uppercase tracking-widest opacity-70">Only group admins can invite people.</div>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setMembersCanAdd(true)}
+                                className={`w-full rounded-2xl border p-4 text-left transition-all ${membersCanAdd ? 'bg-primary-500/10 border-primary-500/30 text-white' : 'bg-white/3 border-white/10 text-slate-400 hover:bg-white/5'}`}
+                            >
+                                <div className="text-sm font-black">All members</div>
+                                <div className="mt-1 text-[10px] uppercase tracking-widest opacity-70">Any member with access can invite people.</div>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="flex gap-4">
@@ -234,7 +277,7 @@ export const CreateGroupWizard: React.FC<CreateGroupWizardProps> = ({ isOpen, on
                 </div>
 
                 <p className="text-[9px] text-center text-slate-700 font-bold uppercase tracking-widest leading-relaxed">
-                    By initializing, a unique 256-bit AES key will be generated and distributed via RSA-4096 to all {selectedUsers.length + 1} participants.
+                    By initializing, a unique 256-bit AES key will be generated and distributed via RSA-4096 to all {selectedUsers.length + 1} participants. {membersCanAdd ? 'Any member can invite more people later.' : 'Only admins can invite more people later.'}
                 </p>
               </div>
             )}

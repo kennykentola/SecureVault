@@ -81,6 +81,10 @@ export const AuthPage: React.FC = () => {
                     role: 'user',
                     status: 'active'
                 };
+                const recoveryProfilePayload = {
+                    ...profilePayload,
+                    recovery_vault_backup: recoveryVaultBackup
+                };
                 const fallbackProfilePayload = {
                     user_id: activeId,
                     username: username,
@@ -122,7 +126,7 @@ export const AuthPage: React.FC = () => {
                         APPWRITE_CONFIG.DATABASE_ID,
                         APPWRITE_CONFIG.COLLECTION_USERS,
                         activeId,
-                        profilePayload
+                        recoveryProfilePayload
                     );
                 } catch (e: any) {
                     if (e.code === 409) {
@@ -156,7 +160,7 @@ export const AuthPage: React.FC = () => {
                                 throw updateError;
                             }
                         }
-                    } else if (e?.message?.includes("vault_backup") || e?.message?.includes("legacy_vault_backups")) {
+                    } else if (e?.message?.includes("vault_backup") || e?.message?.includes("legacy_vault_backups") || e?.message?.includes("recovery_vault_backup") || e?.message?.includes("Unknown attribute")) {
                         await databases.createDocument(
                             APPWRITE_CONFIG.DATABASE_ID,
                             APPWRITE_CONFIG.COLLECTION_USERS,
