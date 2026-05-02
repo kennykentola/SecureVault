@@ -13,24 +13,43 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
     const localVideoRef = React.useRef<HTMLVideoElement | null>(null);
     const remoteVideoRef = React.useRef<HTMLVideoElement | null>(null);
     const remoteAudioRef = React.useRef<HTMLAudioElement | null>(null);
+    const localStreamRef = React.useRef<MediaStream | null>(null);
+    const remoteStreamRef = React.useRef<MediaStream | null>(null);
     const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
     const [micMuted, setMicMuted] = React.useState(false);
     const [cameraOff, setCameraOff] = React.useState(false);
     const attachStreamToVideo = (video: HTMLVideoElement | null, stream: MediaStream | null) => {
         if (!video) return;
-        video.srcObject = stream;
+        if (video.srcObject !== stream) {
+            video.srcObject = stream;
+        }
         if (stream) {
             video.muted = true;
             video.playsInline = true;
-            video.play().catch(e => console.warn("Video playback failed", e));
+            const maybePlay = () => video.play().catch(e => {
+                if (e?.name !== 'AbortError') {
+                    console.warn("Video playback failed", e);
+                }
+            });
+            if (video.readyState >= 2) {
+                maybePlay();
+            } else {
+                const onLoadedMetadata = () => {
+                    maybePlay();
+                    video.removeEventListener('loadedmetadata', onLoadedMetadata);
+                };
+                video.addEventListener('loadedmetadata', onLoadedMetadata);
+            }
         }
     };
 
     React.useEffect(() => {
+        localStreamRef.current = callState.localStream;
         attachStreamToVideo(localVideoRef.current, callState.localStream);
     }, [callState.localStream, callState.isActive, callState.callType]);
 
     React.useEffect(() => {
+        remoteStreamRef.current = callState.remoteStream;
         attachStreamToVideo(remoteVideoRef.current, callState.remoteStream);
     }, [callState.remoteStream, callState.isActive, callState.callType]);
 
@@ -86,15 +105,22 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                 : '';
     const hasRemoteVideo = callState.callType === 'video' && !!callState.remoteStream;
     const hasLocalVideo = callState.callType === 'video' && !!callState.localStream;
-    const setLocalVideoNode = (node: HTMLVideoElement | null) => {
-        localVideoRef.current = node;
-        attachStreamToVideo(node, callState.localStream);
-    };
+    const setLocalVideoNodeRef = React.useRef<((node: HTMLVideoElement | null) => void) | null>(null);
+    const setRemoteVideoNodeRef = React.useRef<((node: HTMLVideoElement | null) => void) | null>(null);
 
-    const setRemoteVideoNode = (node: HTMLVideoElement | null) => {
-        remoteVideoRef.current = node;
-        attachStreamToVideo(node, callState.remoteStream);
-    };
+    if (!setLocalVideoNodeRef.current) {
+        setLocalVideoNodeRef.current = (node: HTMLVideoElement | null) => {
+            localVideoRef.current = node;
+            attachStreamToVideo(node, localStreamRef.current);
+        };
+    }
+
+    if (!setRemoteVideoNodeRef.current) {
+        setRemoteVideoNodeRef.current = (node: HTMLVideoElement | null) => {
+            remoteVideoRef.current = node;
+            attachStreamToVideo(node, remoteStreamRef.current);
+        };
+    }
 
     const handleSwipeDismiss = (_event: any, info: { offset: { y: number }, velocity: { y: number } }) => {
         const shouldDismiss = info.offset.y > 120 || info.velocity.y > 900;
@@ -294,7 +320,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                         <div className={`relative rounded-[2rem] overflow-hidden border border-white/10 bg-black shadow-[0_30px_80px_rgba(0,0,0,0.45)] ${callState.callType === 'video' ? 'min-h-[52vh] lg:min-h-[70vh]' : 'min-h-[42vh] lg:min-h-[62vh]'}`}>
                                             {hasRemoteVideo ? (
                                                 <video
-                                                    ref={setRemoteVideoNode}
+                                                    ref={setRemoteVideoNodeRef.current}
                                                     autoPlay
                                                     playsInline
                                                     className="absolute inset-0 w-full h-full object-cover"
@@ -319,7 +345,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                                         {hasLocalVideo && (
                                                             <div className="mt-6 relative w-full max-w-sm aspect-video bg-black/60 backdrop-blur-md rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
                                                                 <video
-                                                                    ref={setLocalVideoNode}
+                                                                    ref={setLocalVideoNodeRef.current}
                                                                     autoPlay
                                                                     playsInline
                                                                     muted
@@ -344,7 +370,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                             {hasRemoteVideo && (
                                                 <div className="absolute top-4 right-4 sm:top-5 sm:right-5 w-24 sm:w-32 aspect-video bg-black/60 backdrop-blur-md rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
                                                     <video
-                                                        ref={setLocalVideoNode}
+                                                        ref={setLocalVideoNodeRef.current}
                                                         autoPlay
                                                         playsInline
                                                         muted

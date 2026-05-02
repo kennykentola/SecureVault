@@ -1751,6 +1751,7 @@ export const Dashboard: React.FC = () => {
                     receiver_id: direction === 'outgoing' ? targetId : user.$id,
                     type: 'call',
                     text: type,
+                    ciphertext: `[CALL_${type.toUpperCase()}_${direction.toUpperCase()}]`,
                     timestamp: new Date().toISOString(),
                     is_group: false
                 }
