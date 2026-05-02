@@ -16,7 +16,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
     const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
     const [micMuted, setMicMuted] = React.useState(false);
     const [cameraOff, setCameraOff] = React.useState(false);
-    const attachStreamToVideo = React.useCallback((video: HTMLVideoElement | null, stream: MediaStream | null) => {
+    const attachStreamToVideo = (video: HTMLVideoElement | null, stream: MediaStream | null) => {
         if (!video) return;
         video.srcObject = stream;
         if (stream) {
@@ -24,15 +24,15 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
             video.playsInline = true;
             video.play().catch(e => console.warn("Video playback failed", e));
         }
-    }, []);
+    };
 
     React.useEffect(() => {
         attachStreamToVideo(localVideoRef.current, callState.localStream);
-    }, [attachStreamToVideo, callState.localStream, callState.isActive, callState.callType]);
+    }, [callState.localStream, callState.isActive, callState.callType]);
 
     React.useEffect(() => {
         attachStreamToVideo(remoteVideoRef.current, callState.remoteStream);
-    }, [attachStreamToVideo, callState.remoteStream, callState.isActive, callState.callType]);
+    }, [callState.remoteStream, callState.isActive, callState.callType]);
 
     React.useEffect(() => {
         if (remoteAudioRef.current) {
@@ -86,15 +86,15 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                 : '';
     const hasRemoteVideo = callState.callType === 'video' && !!callState.remoteStream;
     const hasLocalVideo = callState.callType === 'video' && !!callState.localStream;
-    const setLocalVideoNode = React.useCallback((node: HTMLVideoElement | null) => {
+    const setLocalVideoNode = (node: HTMLVideoElement | null) => {
         localVideoRef.current = node;
         attachStreamToVideo(node, callState.localStream);
-    }, [attachStreamToVideo, callState.localStream]);
+    };
 
-    const setRemoteVideoNode = React.useCallback((node: HTMLVideoElement | null) => {
+    const setRemoteVideoNode = (node: HTMLVideoElement | null) => {
         remoteVideoRef.current = node;
         attachStreamToVideo(node, callState.remoteStream);
-    }, [attachStreamToVideo, callState.remoteStream]);
+    };
 
     const handleSwipeDismiss = (_event: any, info: { offset: { y: number }, velocity: { y: number } }) => {
         const shouldDismiss = info.offset.y > 120 || info.velocity.y > 900;
