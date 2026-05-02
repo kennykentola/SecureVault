@@ -16,24 +16,23 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
     const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
     const [micMuted, setMicMuted] = React.useState(false);
     const [cameraOff, setCameraOff] = React.useState(false);
+    const attachStreamToVideo = React.useCallback((video: HTMLVideoElement | null, stream: MediaStream | null) => {
+        if (!video) return;
+        video.srcObject = stream;
+        if (stream) {
+            video.muted = true;
+            video.playsInline = true;
+            video.play().catch(e => console.warn("Video playback failed", e));
+        }
+    }, []);
 
     React.useEffect(() => {
-        if (localVideoRef.current) {
-            localVideoRef.current.srcObject = callState.localStream || null;
-            if (callState.localStream) {
-                localVideoRef.current.play().catch(e => console.warn("Local video playback failed", e));
-            }
-        }
-    }, [callState.localStream]);
+        attachStreamToVideo(localVideoRef.current, callState.localStream);
+    }, [attachStreamToVideo, callState.localStream, callState.isActive, callState.callType]);
 
     React.useEffect(() => {
-        if (remoteVideoRef.current) {
-            remoteVideoRef.current.srcObject = callState.remoteStream || null;
-            if (callState.remoteStream) {
-                remoteVideoRef.current.play().catch(e => console.warn("Remote video playback failed", e));
-            }
-        }
-    }, [callState.remoteStream]);
+        attachStreamToVideo(remoteVideoRef.current, callState.remoteStream);
+    }, [attachStreamToVideo, callState.remoteStream, callState.isActive, callState.callType]);
 
     React.useEffect(() => {
         if (remoteAudioRef.current) {
@@ -87,6 +86,15 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                 : '';
     const hasRemoteVideo = callState.callType === 'video' && !!callState.remoteStream;
     const hasLocalVideo = callState.callType === 'video' && !!callState.localStream;
+    const setLocalVideoNode = React.useCallback((node: HTMLVideoElement | null) => {
+        localVideoRef.current = node;
+        attachStreamToVideo(node, callState.localStream);
+    }, [attachStreamToVideo, callState.localStream]);
+
+    const setRemoteVideoNode = React.useCallback((node: HTMLVideoElement | null) => {
+        remoteVideoRef.current = node;
+        attachStreamToVideo(node, callState.remoteStream);
+    }, [attachStreamToVideo, callState.remoteStream]);
 
     const handleSwipeDismiss = (_event: any, info: { offset: { y: number }, velocity: { y: number } }) => {
         const shouldDismiss = info.offset.y > 120 || info.velocity.y > 900;
@@ -286,7 +294,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                         <div className={`relative rounded-[2rem] overflow-hidden border border-white/10 bg-black shadow-[0_30px_80px_rgba(0,0,0,0.45)] ${callState.callType === 'video' ? 'min-h-[52vh] lg:min-h-[70vh]' : 'min-h-[42vh] lg:min-h-[62vh]'}`}>
                                             {hasRemoteVideo ? (
                                                 <video
-                                                    ref={remoteVideoRef}
+                                                    ref={setRemoteVideoNode}
                                                     autoPlay
                                                     playsInline
                                                     className="absolute inset-0 w-full h-full object-cover"
@@ -311,7 +319,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                                         {hasLocalVideo && (
                                                             <div className="mt-6 relative w-full max-w-sm aspect-video bg-black/60 backdrop-blur-md rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
                                                                 <video
-                                                                    ref={localVideoRef}
+                                                                    ref={setLocalVideoNode}
                                                                     autoPlay
                                                                     playsInline
                                                                     muted
@@ -336,7 +344,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                             {hasRemoteVideo && (
                                                 <div className="absolute top-4 right-4 sm:top-5 sm:right-5 w-24 sm:w-32 aspect-video bg-black/60 backdrop-blur-md rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
                                                     <video
-                                                        ref={localVideoRef}
+                                                        ref={setLocalVideoNode}
                                                         autoPlay
                                                         playsInline
                                                         muted
