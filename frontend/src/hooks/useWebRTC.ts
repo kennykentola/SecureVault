@@ -33,12 +33,17 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
     const currentCall = useRef<MediaConnection | null>(null);
     const callStateRef = useRef<CallState>(INITIAL_CALL_STATE);
     const peerRef = useRef<Peer | null>(null);
+    const resolveDisplayNameRef = useRef(resolveDisplayName);
     const initTimerRef = useRef<number | null>(null);
     const retryTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
         callStateRef.current = callState;
     }, [callState]);
+
+    useEffect(() => {
+        resolveDisplayNameRef.current = resolveDisplayName;
+    }, [resolveDisplayName]);
 
     useEffect(() => {
         if (!userId) return;
@@ -118,7 +123,7 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
                     ...prev,
                     isIncoming: true,
                     caller: call.peer,
-                    callerName: resolveDisplayName?.(call.peer) || call.peer,
+                    callerName: resolveDisplayNameRef.current?.(call.peer) || call.peer,
                     callType
                 }));
                 call.on('error', (err: any) => {
@@ -194,7 +199,7 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
                 isOutgoing: true,
                 localStream: stream,
                 caller: remoteId,
-                callerName: resolveDisplayName?.(remoteId) || remoteId,
+                callerName: resolveDisplayNameRef.current?.(remoteId) || remoteId,
                 callType: type
             }));
 

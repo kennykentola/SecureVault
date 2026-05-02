@@ -534,7 +534,8 @@ export const Dashboard: React.FC = () => {
 
     const filteredUsers = React.useMemo(() => {
         return networkUsers.filter(u => 
-            (u.username || u.name || "").toLowerCase().includes(searchQuery.toLowerCase())
+            (u.username || u.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (u.email || "").toLowerCase().includes(searchQuery.toLowerCase())
         );
     }, [networkUsers, searchQuery]);
 
