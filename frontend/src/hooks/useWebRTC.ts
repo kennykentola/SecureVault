@@ -37,6 +37,13 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
     const initTimerRef = useRef<number | null>(null);
     const retryTimerRef = useRef<number | null>(null);
 
+    const getVideoConstraints = useCallback((type: 'voice' | 'video') => {
+        if (type !== 'video') return false;
+        return {
+            facingMode: { ideal: 'user' }
+        } as MediaTrackConstraints;
+    }, []);
+
     useEffect(() => {
         callStateRef.current = callState;
     }, [callState]);
@@ -188,7 +195,14 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: true,
-                video: type === 'video'
+                video: getVideoConstraints(type) || false
+            }).catch(async (error) => {
+                if (type !== 'video') throw error;
+                console.warn('Front camera request failed, falling back to default video device.', error);
+                return navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: true
+                });
             });
 
             const call = peer.call(remoteId, stream, { metadata: { video: type === 'video' } });
@@ -218,7 +232,7 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
             console.error('Failed to get local stream', err);
             alert(`Call failed: Access to camera/microphone denied or failed. (${err.message})`);
         }
-    }, [peer, userId]);
+    }, [peer, userId, getVideoConstraints]);
 
     const answerCall = useCallback(async () => {
         if (!currentCall.current) return;
@@ -226,7 +240,14 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
         try {
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: true,
-                video: callState.callType === 'video'
+                video: callState.callType === 'video' ? { facingMode: { ideal: 'user' } } : false
+            }).catch(async (error) => {
+                if (callState.callType !== 'video') throw error;
+                console.warn('Front camera request failed during answer, falling back to default video device.', error);
+                return navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: true
+                });
             });
 
             currentCall.current.answer(stream);
