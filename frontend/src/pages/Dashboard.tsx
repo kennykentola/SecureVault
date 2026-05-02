@@ -1752,6 +1752,7 @@ export const Dashboard: React.FC = () => {
                     type: 'call',
                     text: type,
                     ciphertext: `[CALL_${type.toUpperCase()}_${direction.toUpperCase()}]`,
+                    encrypted_key: '',
                     timestamp: new Date().toISOString(),
                     is_group: false
                 }

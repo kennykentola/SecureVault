@@ -13,40 +13,34 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
     const localVideoRef = React.useRef<HTMLVideoElement | null>(null);
     const remoteVideoRef = React.useRef<HTMLVideoElement | null>(null);
     const remoteAudioRef = React.useRef<HTMLAudioElement | null>(null);
-    const lastLocalStreamRef = React.useRef<MediaStream | null>(null);
-    const lastRemoteStreamRef = React.useRef<MediaStream | null>(null);
     const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
     const [micMuted, setMicMuted] = React.useState(false);
     const [cameraOff, setCameraOff] = React.useState(false);
-    const attachStreamToVideo = React.useCallback((video: HTMLVideoElement | null, stream: MediaStream | null) => {
+    React.useLayoutEffect(() => {
+        const video = localVideoRef.current;
         if (!video) return;
-        if (video.srcObject !== stream) {
-            video.srcObject = stream;
+        if (video.srcObject !== callState.localStream) {
+            video.srcObject = callState.localStream;
         }
-        if (!stream) return;
-        video.muted = true;
-        video.playsInline = true;
-        const tryPlay = () => video.play().catch(e => {
-            if (e?.name !== 'AbortError') {
-                console.warn("Video playback failed", e);
-            }
-        });
-        if (video.readyState >= 2) {
-            tryPlay();
-        } else {
-            requestAnimationFrame(tryPlay);
+        if (callState.localStream) {
+            video.muted = true;
+            video.playsInline = true;
+            video.play().catch(() => {});
         }
-    }, []);
+    }, [callState.localStream]);
 
-    React.useEffect(() => {
-        lastLocalStreamRef.current = callState.localStream;
-        attachStreamToVideo(localVideoRef.current, callState.localStream);
-    }, [attachStreamToVideo, callState.localStream]);
-
-    React.useEffect(() => {
-        lastRemoteStreamRef.current = callState.remoteStream;
-        attachStreamToVideo(remoteVideoRef.current, callState.remoteStream);
-    }, [attachStreamToVideo, callState.remoteStream]);
+    React.useLayoutEffect(() => {
+        const video = remoteVideoRef.current;
+        if (!video) return;
+        if (video.srcObject !== callState.remoteStream) {
+            video.srcObject = callState.remoteStream;
+        }
+        if (callState.remoteStream) {
+            video.playsInline = true;
+            video.muted = false;
+            video.play().catch(() => {});
+        }
+    }, [callState.remoteStream]);
 
     React.useEffect(() => {
         if (remoteAudioRef.current) {
