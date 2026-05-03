@@ -110,8 +110,8 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
             : callState.isActive
                 ? 'Encrypted'
                 : '';
-    const hasRemoteVideo = callState.callType === 'video' && !!callState.remoteStream?.getVideoTracks().some(track => track.enabled);
-    const hasLocalVideo = callState.callType === 'video' && !!callState.localStream?.getVideoTracks().some(track => track.enabled);
+    const hasRemoteVideo = callState.callType === 'video' && !!callState.remoteStream?.getVideoTracks().length;
+    const hasLocalVideo = callState.callType === 'video' && !!callState.localStream?.getVideoTracks().length;
 
     const handleSwipeDismiss = (_event: any, info: { offset: { y: number }, velocity: { y: number } }) => {
         const shouldDismiss = info.offset.y > 120 || info.velocity.y > 900;
