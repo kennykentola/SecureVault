@@ -133,8 +133,10 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
             : callState.isActive
                 ? 'Encrypted'
                 : '';
-    const hasRemoteVideo = callState.callType === 'video' && remoteVideoReady;
-    const hasLocalVideo = callState.callType === 'video' && localVideoReady;
+    const hasRemoteStream = callState.callType === 'video' && !!callState.remoteStream;
+    const hasLocalStream = callState.callType === 'video' && !!callState.localStream;
+    const showRemoteVideo = hasRemoteStream && remoteVideoReady;
+    const showLocalVideo = hasLocalStream && localVideoReady;
 
     const handleSwipeDismiss = (_event: any, info: { offset: { y: number }, velocity: { y: number } }) => {
         const shouldDismiss = info.offset.y > 120 || info.velocity.y > 900;
@@ -332,15 +334,15 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                 >
                                     <div className="grid gap-4 lg:grid-cols-[1fr_auto] items-stretch">
                                         <div className={`relative rounded-[2rem] overflow-hidden border border-white/10 bg-black shadow-[0_30px_80px_rgba(0,0,0,0.45)] ${callState.callType === 'video' ? 'min-h-[52vh] lg:min-h-[70vh]' : 'min-h-[42vh] lg:min-h-[62vh]'}`}>
-                                            <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.16),transparent_30%),radial-gradient(circle_at_center,rgba(16,185,129,0.12),transparent_24%),linear-gradient(180deg,rgba(2,6,23,0.9),rgba(15,23,42,0.98))] ${hasRemoteVideo ? 'opacity-0' : 'opacity-100'}`} />
+                                            <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.16),transparent_30%),radial-gradient(circle_at_center,rgba(16,185,129,0.12),transparent_24%),linear-gradient(180deg,rgba(2,6,23,0.9),rgba(15,23,42,0.98))] ${showRemoteVideo ? 'opacity-0' : 'opacity-100'}`} />
                                             <video
                                                 ref={remoteVideoRef}
                                                 autoPlay
                                                 playsInline
                                                 muted
-                                                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${hasRemoteVideo ? 'opacity-100' : 'opacity-0'}`}
+                                                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${showRemoteVideo ? 'opacity-100' : 'opacity-0'}`}
                                             />
-                                            {!hasRemoteVideo && (
+                                            {!showRemoteVideo && (
                                                 <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
                                                     {callState.callType === 'video' ? (
                                                         <>
@@ -376,21 +378,21 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                                 </div>
                                             )}
 
-                                            {callState.callType === 'video' && hasLocalVideo && (
+                                            {hasLocalStream && (
                                                 <div className="absolute top-4 right-4 sm:top-5 sm:right-5 w-24 sm:w-32 aspect-video bg-black/60 backdrop-blur-md rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
                                                     <video
                                                         ref={localVideoRef}
                                                         autoPlay
                                                         playsInline
                                                         muted
-                                                        className={`w-full h-full object-cover scale-x-[-1] ${cameraOff ? 'opacity-0' : 'opacity-100'}`}
+                                                        className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-300 ${showLocalVideo && !cameraOff ? 'opacity-100' : 'opacity-0'}`}
                                                     />
-                                                    {!cameraOff && (
+                                                    {showLocalVideo && !cameraOff && (
                                                         <div className="absolute bottom-1.5 left-1.5 px-2 py-0.5 bg-black/40 rounded-lg text-[9px] font-black uppercase tracking-widest">
                                                             You
                                                         </div>
                                                     )}
-                                                    {cameraOff && (
+                                                    {hasLocalStream && cameraOff && (
                                                         <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
                                                             <VideoOff className="w-5 h-5 text-white/80" />
                                                         </div>
