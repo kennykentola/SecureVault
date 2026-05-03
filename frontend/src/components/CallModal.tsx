@@ -16,21 +16,10 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
     const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
     const [micMuted, setMicMuted] = React.useState(false);
     const [cameraOff, setCameraOff] = React.useState(false);
-    const [localVideoReady, setLocalVideoReady] = React.useState(false);
-    const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
-    const attachStream = React.useCallback((
-        video: HTMLVideoElement | null,
-        stream: MediaStream | null,
-        muted = false,
-        onReady?: (ready: boolean) => void
-    ) => {
+    const attachStream = React.useCallback((video: HTMLVideoElement | null, stream: MediaStream | null, muted = false) => {
         if (!video) return;
         if (!stream) {
             video.srcObject = null;
-            video.onloadedmetadata = null;
-            video.onloadeddata = null;
-            video.onplaying = null;
-            onReady?.(false);
             return;
         }
 
@@ -50,25 +39,18 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
 
         if (video.readyState >= 2) {
             tryPlay();
-            if (video.videoWidth > 0 && video.videoHeight > 0) {
-                onReady?.(true);
-            }
             return;
         }
 
         const onLoaded = () => {
             tryPlay();
-            onReady?.(video.videoWidth > 0 && video.videoHeight > 0);
         };
-        const onPlaying = () => onReady?.(video.videoWidth > 0 && video.videoHeight > 0);
         video.onloadedmetadata = onLoaded;
-        video.onloadeddata = onPlaying;
-        video.onplaying = onPlaying;
     }, []);
     React.useLayoutEffect(() => {
         const video = localVideoRef.current;
         if (!video) return;
-        attachStream(video, callState.localStream, true, setLocalVideoReady);
+        attachStream(video, callState.localStream, true);
     }, [attachStream, callState.localStream]);
 
     React.useLayoutEffect(() => {
@@ -76,7 +58,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
         if (!video) return;
         // Keep the remote video muted so autoplay is reliable. We route audio through
         // a dedicated audio element for both voice and video calls.
-        attachStream(video, callState.remoteStream, true, setRemoteVideoReady);
+        attachStream(video, callState.remoteStream, true);
     }, [attachStream, callState.remoteStream]);
 
     React.useEffect(() => {
@@ -135,8 +117,8 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                 : '';
     const hasRemoteStream = callState.callType === 'video' && !!callState.remoteStream;
     const hasLocalStream = callState.callType === 'video' && !!callState.localStream;
-    const showRemoteVideo = hasRemoteStream && remoteVideoReady;
-    const showLocalVideo = hasLocalStream && localVideoReady;
+    const showRemoteVideo = hasRemoteStream;
+    const showLocalVideo = hasLocalStream;
 
     const handleSwipeDismiss = (_event: any, info: { offset: { y: number }, velocity: { y: number } }) => {
         const shouldDismiss = info.offset.y > 120 || info.velocity.y > 900;

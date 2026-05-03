@@ -71,6 +71,17 @@ export const CallHistory: React.FC<CallHistoryProps> = ({ user, onStartCall }) =
         c.participant.name?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
+    const getCallPayload = (call: any) => {
+        if (!call) return {};
+        try {
+            const raw = call.payload;
+            if (!raw) return {};
+            return typeof raw === 'string' ? JSON.parse(raw) : raw;
+        } catch {
+            return {};
+        }
+    };
+
     if (isLoading) return (
         <div className="flex-1 flex items-center justify-center">
             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -107,7 +118,9 @@ export const CallHistory: React.FC<CallHistoryProps> = ({ user, onStartCall }) =
                 ) : (
                     filteredCalls.map((call) => {
                         const isOutgoing = call.sender_id === user.$id;
-                        const isVideo = call.text === 'video';
+                        const payload = getCallPayload(call);
+                        const callType = payload.callType || payload.type || call.callType || call.text || 'voice';
+                        const isVideo = callType === 'video';
                         const time = new Date(call.timestamp || call.$createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                         const date = new Date(call.timestamp || call.$createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' });
 

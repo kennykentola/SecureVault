@@ -1742,6 +1742,7 @@ export const Dashboard: React.FC = () => {
     const logCall = async (targetId: string, type: 'voice' | 'video', direction: 'outgoing' | 'incoming') => {
         if (!user?.$id) return;
         try {
+            const timestamp = new Date().toISOString();
             await databases.createDocument(
                 APPWRITE_CONFIG.DATABASE_ID,
                 APPWRITE_CONFIG.COLLECTION_MESSAGES,
@@ -1750,14 +1751,18 @@ export const Dashboard: React.FC = () => {
                     sender_id: direction === 'outgoing' ? user.$id : targetId,
                     receiver_id: direction === 'outgoing' ? targetId : user.$id,
                     type: 'call',
-                    text: type,
                     ciphertext: `[CALL_${type.toUpperCase()}_${direction.toUpperCase()}]`,
-                    // Keep the call log compatible with the existing encrypted message schema.
                     encrypted_key: `CALL_LOG_${type}_${direction}`,
                     iv: `CALL_LOG_IV_${type}_${direction}`,
                     hash: `CALL_LOG_HASH_${type}_${direction}`,
-                    timestamp: new Date().toISOString(),
-                    is_group: false
+                    payload: JSON.stringify({
+                        type: 'call',
+                        callType: type,
+                        direction,
+                        timestamp,
+                        sender_name: user.name || user.email || '',
+                    }),
+                    timestamp
                 }
             );
         } catch (e) {
