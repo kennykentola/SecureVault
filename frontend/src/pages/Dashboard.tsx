@@ -1752,7 +1752,8 @@ export const Dashboard: React.FC = () => {
                     type: 'call',
                     text: type,
                     ciphertext: `[CALL_${type.toUpperCase()}_${direction.toUpperCase()}]`,
-                    encrypted_key: '',
+                    // Appwrite treats empty strings as missing for some required attributes.
+                    encrypted_key: `CALL_LOG_${type}_${direction}`,
                     timestamp: new Date().toISOString(),
                     is_group: false
                 }

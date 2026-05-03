@@ -16,41 +16,59 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
     const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
     const [micMuted, setMicMuted] = React.useState(false);
     const [cameraOff, setCameraOff] = React.useState(false);
+    const attachStream = React.useCallback((video: HTMLVideoElement | null, stream: MediaStream | null, muted = false) => {
+        if (!video) return;
+        video.srcObject = stream;
+        video.muted = muted;
+        video.playsInline = true;
+        if (!stream) return;
+
+        const tryPlay = () => {
+            video.play().catch((error: any) => {
+                if (error?.name !== 'AbortError' && error?.name !== 'NotAllowedError') {
+                    console.warn("Video playback failed", error);
+                }
+            });
+        };
+
+        if (video.readyState >= 2) {
+            tryPlay();
+            return;
+        }
+
+        const onLoaded = () => {
+            video.removeEventListener('loadedmetadata', onLoaded);
+            tryPlay();
+        };
+        video.addEventListener('loadedmetadata', onLoaded);
+    }, []);
     React.useLayoutEffect(() => {
         const video = localVideoRef.current;
         if (!video) return;
-        if (video.srcObject !== callState.localStream) {
-            video.srcObject = callState.localStream;
-        }
-        if (callState.localStream) {
-            video.muted = true;
-            video.playsInline = true;
-            video.play().catch(() => {});
-        }
-    }, [callState.localStream]);
+        attachStream(video, callState.localStream, true);
+    }, [attachStream, callState.localStream]);
 
     React.useLayoutEffect(() => {
         const video = remoteVideoRef.current;
         if (!video) return;
-        if (video.srcObject !== callState.remoteStream) {
-            video.srcObject = callState.remoteStream;
-        }
-        if (callState.remoteStream) {
-            video.playsInline = true;
-            video.muted = false;
-            video.play().catch(() => {});
-        }
-    }, [callState.remoteStream]);
+        // Keep the remote video muted so autoplay is reliable. We route audio through
+        // a dedicated audio element for both voice and video calls.
+        attachStream(video, callState.remoteStream, true);
+    }, [attachStream, callState.remoteStream]);
 
     React.useEffect(() => {
-        if (remoteAudioRef.current) {
-            const shouldUseAudioElement = callState.callType === 'voice';
-            remoteAudioRef.current.srcObject = shouldUseAudioElement ? callState.remoteStream : null;
-            if (shouldUseAudioElement && callState.remoteStream) {
-                remoteAudioRef.current.play().catch(e => console.warn("Remote audio playback failed", e));
-            }
+        const audio = remoteAudioRef.current;
+        if (!audio) return;
+
+        audio.srcObject = callState.remoteStream;
+        audio.muted = false;
+
+        if (callState.remoteStream) {
+            audio.play().catch(e => console.warn("Remote audio playback failed", e));
+        } else {
+            audio.pause();
         }
-    }, [callState.callType, callState.remoteStream]);
+    }, [callState.remoteStream]);
 
     React.useEffect(() => {
         if (!callState.isActive) {
@@ -92,8 +110,8 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
             : callState.isActive
                 ? 'Encrypted'
                 : '';
-    const hasRemoteVideo = callState.callType === 'video' && !!callState.remoteStream;
-    const hasLocalVideo = callState.callType === 'video' && !!callState.localStream;
+    const hasRemoteVideo = callState.callType === 'video' && !!callState.remoteStream?.getVideoTracks().some(track => track.enabled);
+    const hasLocalVideo = callState.callType === 'video' && !!callState.localStream?.getVideoTracks().some(track => track.enabled);
 
     const handleSwipeDismiss = (_event: any, info: { offset: { y: number }, velocity: { y: number } }) => {
         const shouldDismiss = info.offset.y > 120 || info.velocity.y > 900;
@@ -296,6 +314,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                                 ref={remoteVideoRef}
                                                 autoPlay
                                                 playsInline
+                                                muted
                                                 className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${hasRemoteVideo ? 'opacity-100' : 'opacity-0'}`}
                                             />
                                             {!hasRemoteVideo && (
@@ -395,9 +414,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                         </AnimatePresence>
                     </div>
 
-                    {callState.isActive && callState.callType === 'voice' && (
-                        <audio ref={remoteAudioRef} autoPlay playsInline />
-                    )}
+                    <audio ref={remoteAudioRef} autoPlay playsInline className="hidden" />
                 </div>
             </motion.div>
         </AnimatePresence>
