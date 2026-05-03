@@ -319,20 +319,37 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                             />
                                             {!hasRemoteVideo && (
                                                 <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-                                                    {callState.callType === 'video' && (
-                                                        <div className="relative mb-5 w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-white/6 border border-white/10 flex items-center justify-center shadow-2xl shadow-cyan-500/10">
-                                                            <RingPulse />
-                                                            <div className="relative z-10 w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-linear-to-tr from-primary-600 via-cyan-500 to-emerald-400 flex items-center justify-center">
-                                                                <Video className="w-12 h-12 sm:w-14 sm:h-14 text-white" />
+                                                    {callState.callType === 'video' ? (
+                                                        <>
+                                                            <div className="relative mb-5 w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-white/6 border border-white/10 flex items-center justify-center shadow-2xl shadow-cyan-500/10">
+                                                                <RingPulse />
+                                                                <div className="relative z-10 w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-linear-to-tr from-primary-600 via-cyan-500 to-emerald-400 flex items-center justify-center">
+                                                                    <Video className="w-12 h-12 sm:w-14 sm:h-14 text-white" />
+                                                                </div>
                                                             </div>
-                                                        </div>
+                                                            <h2 className="text-3xl sm:text-4xl font-black tracking-tight">
+                                                                {displayName}
+                                                            </h2>
+                                                            <p className="mt-2 text-sm sm:text-base text-slate-300 max-w-md">
+                                                                Waiting for the video feed. If the screen stays dark, the other side may have video off or permissions blocked.
+                                                            </p>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <div className="relative mb-5 w-36 h-36 sm:w-44 sm:h-44 rounded-full bg-white/6 border border-white/10 flex items-center justify-center shadow-2xl shadow-cyan-500/10">
+                                                                <RingPulse />
+                                                                <div className="relative z-10 w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-linear-to-tr from-primary-600 via-cyan-500 to-emerald-400 flex items-center justify-center">
+                                                                    <Mic className="w-12 h-12 sm:w-14 sm:h-14 text-white" />
+                                                                </div>
+                                                            </div>
+                                                            <h2 className="text-3xl sm:text-4xl font-black tracking-tight">
+                                                                {displayName}
+                                                            </h2>
+                                                            <p className="mt-2 text-sm sm:text-base text-slate-300 max-w-md">
+                                                                Secure voice call in progress.
+                                                            </p>
+                                                        </>
                                                     )}
-                                                    <h2 className="text-3xl sm:text-4xl font-black tracking-tight">
-                                                        {displayName}
-                                                    </h2>
-                                                    <p className="mt-2 text-sm sm:text-base text-slate-300 max-w-md">
-                                                        Waiting for the video feed. If the screen stays dark, the other side may have video off or permissions blocked.
-                                                    </p>
                                                 </div>
                                             )}
 
