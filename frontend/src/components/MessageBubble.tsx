@@ -41,7 +41,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     const fileId = msg.fileId || msg.file_id || msg.mediaData?.fileId || msg.mediaData?.file_id;
     const fileName = msg.fileName || msg.filename || msg.mediaData?.fileName || msg.mediaData?.file_name || msg.mediaData?.name || (msg.text?.includes('File: ') ? msg.text.split('File: ')[1] : '');
     
-    useEffect(() => {
+    const iv = msg.iv || msg.mediaData?.iv || msg.mediaData?.iv_b64;
+    const rawKeyBase64 = msg.decryptedKeyBase64 || msg.mediaData?.decryptedKeyBase64;
+    const localFile = msg.localFile instanceof File ? msg.localFile : null;
+    const originalMimeType = msg.originalMimeType || msg.original_mime_type || msg.mediaData?.originalMimeType || msg.mediaData?.original_mime_type || localFile?.type;
+    const isPreviewable = originalMimeType?.startsWith('image/') || originalMimeType?.startsWith('video/');
+    const durationLabel = msg.duration || msg.mediaData?.duration;
+    
+    React.useEffect(() => {
         if (msg.type === 'file' || msg.type === 'voice') {
             console.log(`[MessageBubble] Rendering ${msg.type}:`, {
                 id: msg.$id,
@@ -54,18 +61,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     }, [msg.$id]);
 
     // Auto-decrypt images
-    useEffect(() => {
+    React.useEffect(() => {
         if (mediaType === 'file' && isPreviewable && !decryptedUrl && !isDecrypting && rawKeyBase64 && iv) {
             handleMediaAction();
         }
     }, [mediaType, isPreviewable, decryptedUrl, isDecrypting, rawKeyBase64, iv]);
-    const iv = msg.iv || msg.mediaData?.iv || msg.mediaData?.iv_b64;
-    const durationLabel = msg.duration || msg.mediaData?.duration;
-    const rawKeyBase64 = msg.decryptedKeyBase64 || msg.mediaData?.decryptedKeyBase64;
-    const localFile = msg.localFile instanceof File ? msg.localFile : null;
+
     const isCoarsePointer = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
-    const originalMimeType = msg.originalMimeType || msg.original_mime_type || msg.mediaData?.originalMimeType || msg.mediaData?.original_mime_type || localFile?.type;
-    const isPreviewable = originalMimeType?.startsWith('image/') || originalMimeType?.startsWith('video/');
 
     React.useEffect(() => {
         if (localFile && !decryptedUrl) {
