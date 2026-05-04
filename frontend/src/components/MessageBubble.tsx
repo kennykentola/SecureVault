@@ -135,7 +135,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             } else {
                 const link = document.createElement('a');
                 link.href = decryptedUrl;
-                link.download = fileName || 'file';
+                link.download = fileName || 'attachment';
                 link.click();
             }
             return;
@@ -186,7 +186,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 setTimeout(() => {
                     const link = document.createElement('a');
                     link.href = url;
-                    link.download = fileName || 'file';
+                    link.download = fileName || 'attachment';
                     link.click();
                 }, 100);
             }
@@ -324,7 +324,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                                             <FileText className={`w-5 h-5 ${isOwn ? 'text-white' : 'text-blue-600'}`} />
                                         </div>
                                         <div className="text-left min-w-0 flex-1">
-                                            <p className={`text-xs font-bold truncate ${isOwn ? 'text-white' : 'text-slate-800'}`}>{msg.fileName}</p>
+                                            <p className={`text-xs font-bold truncate ${isOwn ? 'text-white' : 'text-slate-800'}`}>{fileName}</p>
                                             <p className={`text-[10px] font-medium ${isOwn ? 'text-blue-200' : 'text-slate-400'}`}>
                                                 {isDecrypting ? 'Decrypting...' : decryptedUrl ? 'Ready to Download' : 'Encrypted File'}
                                             </p>

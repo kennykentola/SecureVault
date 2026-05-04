@@ -61,6 +61,7 @@ export const useWebRTC = (
     userId: string | undefined,
     resolveDisplayName?: (userId: string | null | undefined) => string | null | undefined,
     sendWsMessage?: SignalSender,
+    wsStatus?: string,
 ) => {
     const [callState, setCallState] = useState<CallState>(INITIAL_CALL_STATE);
 
@@ -70,6 +71,7 @@ export const useWebRTC = (
     const sendWsRef = useRef(sendWsMessage);
     const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
     const localStreamRef = useRef<MediaStream | null>(null);
+    const signalQueueRef = useRef<any[]>([]);
 
     useEffect(() => {
         callStateRef.current = callState;
@@ -83,18 +85,39 @@ export const useWebRTC = (
         sendWsRef.current = sendWsMessage;
     }, [sendWsMessage]);
 
-    const sendSignal = useCallback((type: string, recipientId: string, payload: any) => {
-        if (!sendWsRef.current) {
-            console.warn('WebSocket sendMessage not available for signaling');
-            return false;
+    // Flush signaling queue when WebSocket reconnects
+    useEffect(() => {
+        if (wsStatus === 'connected' && signalQueueRef.current.length > 0) {
+            console.log(`[WebRTC] Reconnected. Flushing ${signalQueueRef.current.length} queued signals.`);
+            const queue = [...signalQueueRef.current];
+            signalQueueRef.current = [];
+            queue.forEach(msg => {
+                sendWsRef.current?.(msg);
+            });
         }
-        return sendWsRef.current({
+    }, [wsStatus]);
+
+    const sendSignal = useCallback((type: string, recipientId: string, payload: any) => {
+        const msg = {
             type,
             recipient_id: recipientId,
             recipientId: recipientId,
             payload,
-        });
-    }, []);
+        };
+
+        if (!sendWsRef.current || wsStatus !== 'connected') {
+            console.warn(`[WebRTC] WebSocket not connected. Queuing ${type} signal.`);
+            signalQueueRef.current.push(msg);
+            return false;
+        }
+
+        const sent = sendWsRef.current(msg);
+        if (!sent) {
+            console.warn(`[WebRTC] Send failed. Queuing ${type} signal.`);
+            signalQueueRef.current.push(msg);
+        }
+        return sent;
+    }, [wsStatus]);
 
     const cleanupPeerConnection = useCallback(() => {
         if (pcRef.current) {

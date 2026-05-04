@@ -292,7 +292,7 @@ export const Dashboard: React.FC = () => {
         }
     });
 
-    const { callState, startCall, answerCall, endCall, handleSignalingMessage } = useWebRTC(user?.$id, resolveCallDisplayName, sendMessage);
+    const { callState, startCall, answerCall, endCall, handleSignalingMessage } = useWebRTC(user?.$id, resolveCallDisplayName, sendMessage, wsStatus);
 
     useEffect(() => {
         handleSignalingRef.current = handleSignalingMessage;

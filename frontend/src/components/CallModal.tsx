@@ -90,6 +90,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
         let elapsed = 0;
         const pollId = window.setInterval(() => {
             elapsed += 250;
+            tryPlay();
             markReady();
             if (resolved || elapsed >= 15000) {
                 window.clearInterval(pollId);
