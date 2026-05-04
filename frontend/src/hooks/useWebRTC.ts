@@ -167,16 +167,34 @@ export const useWebRTC = (
         };
 
         pc.ontrack = (event) => {
-            const [remoteStream] = event.streams;
-            if (remoteStream) {
-                setCallState(prev => ({
+            console.log(`[WebRTC] Received remote track: ${event.track.kind}`, event.streams);
+            
+            setCallState(prev => {
+                let stream = prev.remoteStream;
+                if (!stream) {
+                    stream = event.streams[0] || new MediaStream();
+                }
+
+                // Ensure the track is in our stream
+                if (!stream.getTracks().find(t => t.id === event.track.id)) {
+                    stream.addTrack(event.track);
+                }
+
+                // Monitor track state
+                event.track.onunmute = () => {
+                    console.log(`[WebRTC] Remote ${event.track.kind} track unmuted`);
+                    // Force a re-render if needed
+                    setCallState(p => ({ ...p, remoteStream: new MediaStream(stream!.getTracks()) }));
+                };
+
+                return {
                     ...prev,
                     isActive: true,
                     isOutgoing: false,
                     isIncoming: false,
-                    remoteStream,
-                }));
-            }
+                    remoteStream: new MediaStream(stream.getTracks()), // New instance to trigger React update
+                };
+            });
         };
 
         pc.oniceconnectionstatechange = () => {
@@ -241,6 +259,10 @@ export const useWebRTC = (
 
         try {
             const stream = await getMediaStream(type);
+            stream.getTracks().forEach(t => {
+                t.enabled = true;
+                console.log(`[WebRTC] Local ${t.kind} track enabled: ${t.label}`);
+            });
             localStreamRef.current = stream;
 
             const pc = createPeerConnection(remoteId);
@@ -266,6 +288,7 @@ export const useWebRTC = (
             sendSignal('offer', remoteId, {
                 sdp: pc.localDescription?.toJSON(),
                 video: type === 'video',
+                call_type: type, // Explicit separation
                 callerName: resolveDisplayNameRef.current?.(userId) || userId,
             });
 
@@ -282,6 +305,10 @@ export const useWebRTC = (
 
         try {
             const stream = await getMediaStream(state.callType);
+            stream.getTracks().forEach(t => {
+                t.enabled = true;
+                console.log(`[WebRTC] Answerer ${t.kind} track enabled: ${t.label}`);
+            });
             localStreamRef.current = stream;
 
             const pc = pcRef.current;
@@ -302,6 +329,7 @@ export const useWebRTC = (
 
             sendSignal('answer', state.caller, {
                 sdp: pc.localDescription?.toJSON(),
+                call_type: state.callType, // Explicit separation
             });
 
             // Flush pending ICE candidates
@@ -434,7 +462,11 @@ export const useWebRTC = (
                 pcRef.current = null;
             }
             if (localStreamRef.current) {
-                localStreamRef.current.getTracks().forEach(t => t.stop());
+                console.log("[WebRTC] Cleaning up local tracks...");
+                localStreamRef.current.getTracks().forEach(t => {
+                    t.stop();
+                    t.enabled = false;
+                });
                 localStreamRef.current = null;
             }
         };
