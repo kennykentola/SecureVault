@@ -477,7 +477,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                             is_group=True,
                         )
                         await manager.broadcast_to_group(outbound, group_id, user_id)
-                elif msg_type in ["typing", "status_update", "offer", "answer", "candidate", "reaction", "key_sync_delivery"] and recipient_id:
+                elif msg_type in ["typing", "status_update", "offer", "answer", "candidate", "call_end", "reaction", "key_sync_delivery"] and recipient_id:
                     recipient_id = normalize_direct_recipient_id(recipient_id)
                     outbound = build_outbound_message(msg, sender_id=user_id, recipient_id=recipient_id)
                     await manager.send_personal_message(outbound, recipient_id)

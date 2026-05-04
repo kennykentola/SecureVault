@@ -1,8 +1,4 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Peer } from 'peerjs';
-
-// Define MediaConnection as any for now to bypass Vite/PeerJS export issues
-type MediaConnection = any;
 
 export interface CallState {
     isIncoming: boolean;
@@ -26,23 +22,54 @@ const INITIAL_CALL_STATE: CallState = {
     callType: 'voice'
 };
 
-export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (userId: string | null | undefined) => string | null | undefined) => {
-    const [peer, setPeer] = useState<Peer | null>(null);
+const ICE_SERVERS: RTCIceServer[] = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    // Free TURN servers from Open Relay (metered.ca)
+    {
+        urls: 'turn:a.relay.metered.ca:80',
+        username: 'e8dd65b92f6de1aa0ccedc2e',
+        credential: '6JFy/yDBkpJBnRW1',
+    },
+    {
+        urls: 'turn:a.relay.metered.ca:80?transport=tcp',
+        username: 'e8dd65b92f6de1aa0ccedc2e',
+        credential: '6JFy/yDBkpJBnRW1',
+    },
+    {
+        urls: 'turn:a.relay.metered.ca:443',
+        username: 'e8dd65b92f6de1aa0ccedc2e',
+        credential: '6JFy/yDBkpJBnRW1',
+    },
+    {
+        urls: 'turns:a.relay.metered.ca:443?transport=tcp',
+        username: 'e8dd65b92f6de1aa0ccedc2e',
+        credential: '6JFy/yDBkpJBnRW1',
+    },
+];
+
+/**
+ * Send a WebRTC signaling message through the app's existing WebSocket.
+ * The backend already routes 'offer', 'answer', and 'candidate' message types.
+ */
+type SignalSender = (message: any) => boolean;
+
+export const useWebRTC = (
+    userId: string | undefined,
+    resolveDisplayName?: (userId: string | null | undefined) => string | null | undefined,
+    sendWsMessage?: SignalSender,
+) => {
     const [callState, setCallState] = useState<CallState>(INITIAL_CALL_STATE);
 
-    const currentCall = useRef<MediaConnection | null>(null);
+    const pcRef = useRef<RTCPeerConnection | null>(null);
     const callStateRef = useRef<CallState>(INITIAL_CALL_STATE);
-    const peerRef = useRef<Peer | null>(null);
     const resolveDisplayNameRef = useRef(resolveDisplayName);
-    const initTimerRef = useRef<number | null>(null);
-    const retryTimerRef = useRef<number | null>(null);
-
-    const getVideoConstraints = useCallback((type: 'voice' | 'video') => {
-        if (type !== 'video') return false;
-        return {
-            facingMode: { ideal: 'user' }
-        } as MediaTrackConstraints;
-    }, []);
+    const sendWsRef = useRef(sendWsMessage);
+    const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
+    const localStreamRef = useRef<MediaStream | null>(null);
 
     useEffect(() => {
         callStateRef.current = callState;
@@ -53,184 +80,122 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
     }, [resolveDisplayName]);
 
     useEffect(() => {
-        if (!userId) return;
-        let isCancelled = false;
+        sendWsRef.current = sendWsMessage;
+    }, [sendWsMessage]);
 
-        const initPeer = () => {
-            if (isCancelled || peerRef.current) return;
+    const sendSignal = useCallback((type: string, recipientId: string, payload: any) => {
+        if (!sendWsRef.current) {
+            console.warn('WebSocket sendMessage not available for signaling');
+            return false;
+        }
+        return sendWsRef.current({
+            type,
+            recipient_id: recipientId,
+            recipientId: recipientId,
+            payload,
+        });
+    }, []);
 
-            const newPeer = new Peer(userId, {
-                debug: 1,
-                config: {
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' },
-                    ]
-                }
-            });
+    const cleanupPeerConnection = useCallback(() => {
+        if (pcRef.current) {
+            pcRef.current.onicecandidate = null;
+            pcRef.current.ontrack = null;
+            pcRef.current.oniceconnectionstatechange = null;
+            pcRef.current.close();
+            pcRef.current = null;
+        }
+        pendingCandidatesRef.current = [];
+    }, []);
 
-            peerRef.current = newPeer;
-            setPeer(newPeer);
+    const endCall = useCallback(() => {
+        const state = callStateRef.current;
 
-            newPeer.on('open', (id) => {
-                if (isCancelled || peerRef.current !== newPeer) {
-                    if (!newPeer.destroyed) newPeer.destroy();
-                    return;
-                }
-                console.log('Peer connected with ID:', id);
-            });
+        // Notify the other party
+        if (state.caller && sendWsRef.current) {
+            sendSignal('call_end', state.caller, { reason: 'hangup' });
+        }
 
-            newPeer.on('error', (err) => {
-                if (isCancelled || peerRef.current !== newPeer) return;
-                console.error('PeerJS Error:', err.type, err);
+        cleanupPeerConnection();
 
-                if (err.type === 'unavailable-id') {
-                    // Our own peer ID is taken — retry with a delay
-                    console.warn(`PeerJS ID ${userId} is already registered. Retrying in 2s...`);
-                    if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
-                    retryTimerRef.current = window.setTimeout(() => {
-                        if (isCancelled || newPeer.destroyed) return;
-                        newPeer.destroy();
-                        if (peerRef.current === newPeer) {
-                            peerRef.current = null;
-                            setPeer(null);
-                        }
-                        initPeer();
-                    }, 2000);
+        setCallState(prev => {
+            if (prev.localStream) {
+                prev.localStream.getTracks().forEach(t => t.stop());
+            }
+            if (prev.remoteStream) {
+                prev.remoteStream.getTracks().forEach(t => t.stop());
+            }
+            return { ...INITIAL_CALL_STATE };
+        });
+        localStreamRef.current = null;
+    }, [cleanupPeerConnection, sendSignal]);
 
-                } else if (err.type === 'peer-unavailable') {
-                    // Remote peer is offline or hasn't registered with PeerJS yet
-                    alert('The person you are calling is not available right now.\nThey may be offline or have not opened the app.');
-                    // End any outgoing call state cleanly
-                    if (currentCall.current) {
-                        currentCall.current.close();
-                        currentCall.current = null;
-                    }
-                    setCallState(prev => {
-                        if (prev.localStream) prev.localStream.getTracks().forEach(t => t.stop());
-                        return { ...INITIAL_CALL_STATE };
-                    });
+    const createPeerConnection = useCallback((remoteId: string) => {
+        cleanupPeerConnection();
 
-                } else if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
-                    // PeerJS does NOT auto-reconnect — we must trigger it ourselves
-                    console.warn('PeerJS connection lost:', err.type, '— will attempt reconnect via disconnected handler.');
-                    if (!newPeer.destroyed && !newPeer.disconnected) {
-                        // Peer object is still connected; the disconnected event will fire next
-                    } else if (!newPeer.destroyed) {
-                        // Already disconnected — try an immediate reconnect
-                        try {
-                            newPeer.reconnect();
-                        } catch (reconnectErr) {
-                            console.warn('PeerJS reconnect() failed:', reconnectErr);
-                        }
-                    }
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+        pcRef.current = pc;
 
-                } else {
-                    // Unknown / fatal error
-                    console.error('PeerJS fatal error:', err.type, err.message);
-                }
-            });
+        pc.onicecandidate = (event) => {
+            if (event.candidate) {
+                sendSignal('candidate', remoteId, {
+                    candidate: event.candidate.toJSON(),
+                });
+            }
+        };
 
-            newPeer.on('call', (call) => {
-                if (isCancelled || peerRef.current !== newPeer) return;
-                // Incoming call
-                const callType = call.metadata?.video ? 'video' : 'voice';
+        pc.ontrack = (event) => {
+            const [remoteStream] = event.streams;
+            if (remoteStream) {
                 setCallState(prev => ({
                     ...prev,
-                    isIncoming: true,
-                    caller: call.peer,
-                    callerName: resolveDisplayNameRef.current?.(call.peer) || call.peer,
-                    callType
+                    isActive: true,
+                    isOutgoing: false,
+                    isIncoming: false,
+                    remoteStream,
                 }));
-                call.on('error', (err: any) => {
-                    console.error('Incoming call failed', err);
-                    endCall();
-                });
-                call.on('close', () => endCall());
-                currentCall.current = call;
-            });
+            }
+        };
 
-            // 'disconnected' fires when the signaling WebSocket drops but the peer
-            // is still usable — attempt reconnect with exponential backoff
-            newPeer.on('disconnected', () => {
-                if (isCancelled || peerRef.current !== newPeer) return;
-                console.warn('PeerJS disconnected from signaling server — attempting reconnect...');
-                let attempts = 0;
-                const maxAttempts = 5;
-                const tryReconnect = () => {
-                    if (isCancelled || peerRef.current !== newPeer || newPeer.destroyed) return;
-                    if (newPeer.open) {
-                        console.log('PeerJS reconnected successfully.');
-                        return;
-                    }
-                    if (attempts >= maxAttempts) {
-                        console.warn('PeerJS reconnect failed after', maxAttempts, 'attempts. Doing full re-init...');
-                        newPeer.destroy();
-                        if (peerRef.current === newPeer) {
-                            peerRef.current = null;
-                            setPeer(null);
+        pc.oniceconnectionstatechange = () => {
+            const state = pc.iceConnectionState;
+            console.log('ICE connection state:', state);
+            if (state === 'failed' || state === 'disconnected' || state === 'closed') {
+                // Give 'disconnected' a grace period — ICE can recover
+                if (state === 'disconnected') {
+                    setTimeout(() => {
+                        if (pc.iceConnectionState === 'disconnected') {
+                            console.warn('ICE stayed disconnected — ending call.');
+                            endCall();
                         }
-                        if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
-                        retryTimerRef.current = window.setTimeout(() => {
-                            if (!isCancelled) initPeer();
-                        }, 2000);
-                        return;
-                    }
-                    attempts++;
-                    try {
-                        newPeer.reconnect();
-                    } catch (e) {
-                        console.warn('PeerJS reconnect() threw:', e);
-                    }
-                    if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
-                    retryTimerRef.current = window.setTimeout(tryReconnect, Math.min(1000 * Math.pow(2, attempts - 1), 8000));
-                };
-                if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
-                retryTimerRef.current = window.setTimeout(tryReconnect, 1000);
-            });
-
-            // 'close' fires when the peer is fully destroyed — do a fresh re-init
-            newPeer.on('close', () => {
-                if (peerRef.current === newPeer) {
-                    peerRef.current = null;
-                    setPeer(null);
+                    }, 5000);
+                } else if (state === 'failed' || state === 'closed') {
+                    endCall();
                 }
-                // Auto re-init unless the component is unmounting
-                if (!isCancelled) {
-                    console.log('PeerJS peer closed. Re-initializing in 2s...');
-                    if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
-                    retryTimerRef.current = window.setTimeout(() => {
-                        if (!isCancelled) initPeer();
-                    }, 2000);
-                }
-            });
-
-            return newPeer;
+            }
         };
 
-        initTimerRef.current = window.setTimeout(() => {
-            initPeer();
-        }, 200);
+        return pc;
+    }, [cleanupPeerConnection, sendSignal, endCall]);
 
-        return () => {
-            isCancelled = true;
-            if (initTimerRef.current) {
-                window.clearTimeout(initTimerRef.current);
-                initTimerRef.current = null;
-            }
-            if (retryTimerRef.current) {
-                window.clearTimeout(retryTimerRef.current);
-                retryTimerRef.current = null;
-            }
-            const activePeer = peerRef.current;
-            peerRef.current = null;
-            if (activePeer && !activePeer.destroyed) {
-                activePeer.destroy();
-            }
-            setPeer(null);
+    const getMediaStream = useCallback(async (type: 'voice' | 'video') => {
+        const constraints: MediaStreamConstraints = {
+            audio: true,
+            video: type === 'video' ? { facingMode: { ideal: 'user' } } : false,
         };
-    }, [userId]);
+
+        try {
+            return await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (error) {
+            if (type === 'video') {
+                console.warn('Front camera failed, falling back to default video device.', error);
+                return await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: true,
+                });
+            }
+            throw error;
+        }
+    }, []);
 
     const startCall = useCallback(async (remoteId: string, type: 'voice' | 'video') => {
         if (!remoteId) return;
@@ -240,31 +205,31 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
             return;
         }
 
-        if (!peer || peer.destroyed || peer.disconnected || !peer.open) {
-            alert("Call setup is still connecting. Please wait a moment and try again.");
+        if (!sendWsRef.current) {
+            alert("Signaling connection is not ready. Please wait a moment and try again.");
             return;
         }
 
-        if (currentCall.current || callStateRef.current.isIncoming || callStateRef.current.isOutgoing || callStateRef.current.isActive) {
+        const state = callStateRef.current;
+        if (pcRef.current || state.isIncoming || state.isOutgoing || state.isActive) {
             console.warn("A call session is already active.");
             return;
         }
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: true,
-                video: getVideoConstraints(type) || false
-            }).catch(async (error) => {
-                if (type !== 'video') throw error;
-                console.warn('Front camera request failed, falling back to default video device.', error);
-                return navigator.mediaDevices.getUserMedia({
-                    audio: true,
-                    video: true
-                });
+            const stream = await getMediaStream(type);
+            localStreamRef.current = stream;
+
+            const pc = createPeerConnection(remoteId);
+
+            // Add local tracks to the connection
+            stream.getTracks().forEach(track => {
+                pc.addTrack(track, stream);
             });
 
-            const call = peer.call(remoteId, stream, { metadata: { video: type === 'video' } });
-            currentCall.current = call;
+            // Create and send offer
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
 
             setCallState(prev => ({
                 ...prev,
@@ -272,87 +237,185 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
                 localStream: stream,
                 caller: remoteId,
                 callerName: resolveDisplayNameRef.current?.(remoteId) || remoteId,
-                callType: type
+                callType: type,
             }));
 
-            call.on('stream', (remoteStream: MediaStream) => {
-                setCallState(prev => ({ ...prev, isActive: true, isOutgoing: false, remoteStream }));
+            sendSignal('offer', remoteId, {
+                sdp: pc.localDescription?.toJSON(),
+                video: type === 'video',
+                callerName: resolveDisplayNameRef.current?.(userId) || userId,
             });
 
-            call.on('error', (err: any) => {
-                console.error('Call connection failed', err);
-                alert(`Call failed: ${err?.message || 'Unable to establish a secure media session.'}`);
-                endCall();
-            });
-
-            call.on('close', () => endCall());
         } catch (err: any) {
-            console.error('Failed to get local stream', err);
-            alert(`Call failed: Access to camera/microphone denied or failed. (${err.message})`);
+            console.error('Failed to start call', err);
+            cleanupPeerConnection();
+            alert(`Call failed: ${err.message || 'Unable to access camera/microphone.'}`);
         }
-    }, [peer, userId, getVideoConstraints]);
+    }, [userId, getMediaStream, createPeerConnection, sendSignal, cleanupPeerConnection]);
 
     const answerCall = useCallback(async () => {
-        if (!currentCall.current) return;
+        const state = callStateRef.current;
+        if (!state.isIncoming || !state.caller) return;
 
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: true,
-                video: callState.callType === 'video' ? { facingMode: { ideal: 'user' } } : false
-            }).catch(async (error) => {
-                if (callState.callType !== 'video') throw error;
-                console.warn('Front camera request failed during answer, falling back to default video device.', error);
-                return navigator.mediaDevices.getUserMedia({
-                    audio: true,
-                    video: true
-                });
+            const stream = await getMediaStream(state.callType);
+            localStreamRef.current = stream;
+
+            const pc = pcRef.current;
+            if (!pc) {
+                console.error('No peer connection found for incoming call');
+                endCall();
+                return;
+            }
+
+            // Add local tracks
+            stream.getTracks().forEach(track => {
+                pc.addTrack(track, stream);
             });
 
-            currentCall.current.answer(stream);
+            // Create and send answer
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+
+            sendSignal('answer', state.caller, {
+                sdp: pc.localDescription?.toJSON(),
+            });
+
+            // Flush pending ICE candidates
+            for (const candidate of pendingCandidatesRef.current) {
+                try {
+                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch (e) {
+                    console.warn('Failed to add buffered ICE candidate:', e);
+                }
+            }
+            pendingCandidatesRef.current = [];
+
             setCallState(prev => ({
                 ...prev,
                 isIncoming: false,
                 isActive: true,
-                localStream: stream
+                localStream: stream,
             }));
 
-            currentCall.current.on('stream', (remoteStream: MediaStream) => {
-                setCallState(prev => ({ ...prev, remoteStream }));
-            });
-
-            currentCall.current.on('error', (err: any) => {
-                console.error('Call connection failed', err);
-                alert(`Call failed: ${err?.message || 'Unable to establish a secure media session.'}`);
-                endCall();
-            });
-
-            currentCall.current.on('close', () => endCall());
         } catch (err: any) {
-            console.error('Failed to get local stream', err);
-            alert(`Call failed: Access to camera/microphone denied or failed. (${err.message})`);
+            console.error('Failed to answer call', err);
+            alert(`Call failed: ${err.message || 'Unable to access camera/microphone.'}`);
+            endCall();
         }
-    }, [callState.callType]);
+    }, [getMediaStream, sendSignal, endCall]);
 
-    const endCall = useCallback(() => {
-        if (currentCall.current) {
-            currentCall.current.close();
-            currentCall.current = null;
+    /**
+     * Handle incoming WebRTC signaling messages from the WebSocket.
+     * This should be called from the Dashboard's onMessage handler.
+     */
+    const handleSignalingMessage = useCallback(async (msg: any) => {
+        const senderId = msg.sender_id;
+        if (!senderId || senderId === userId) return;
+
+        const type = msg.type;
+        const payload = msg.payload || msg;
+
+        if (type === 'offer') {
+            // Incoming call — set up peer connection + remote description
+            const callType = payload.video ? 'video' : 'voice';
+            const callerName = payload.callerName || resolveDisplayNameRef.current?.(senderId) || senderId;
+
+            // If already in a call, reject
+            const state = callStateRef.current;
+            if (state.isActive || state.isOutgoing || state.isIncoming) {
+                sendSignal('call_end', senderId, { reason: 'busy' });
+                return;
+            }
+
+            const pc = createPeerConnection(senderId);
+
+            try {
+                await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            } catch (e) {
+                console.error('Failed to set remote offer:', e);
+                cleanupPeerConnection();
+                return;
+            }
+
+            setCallState(prev => ({
+                ...prev,
+                isIncoming: true,
+                caller: senderId,
+                callerName,
+                callType,
+            }));
+
+        } else if (type === 'answer') {
+            const pc = pcRef.current;
+            if (!pc) return;
+
+            try {
+                await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+            } catch (e) {
+                console.error('Failed to set remote answer:', e);
+            }
+
+            // Flush any buffered candidates
+            for (const candidate of pendingCandidatesRef.current) {
+                try {
+                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch (e) {
+                    console.warn('Failed to add buffered ICE candidate:', e);
+                }
+            }
+            pendingCandidatesRef.current = [];
+
+        } else if (type === 'candidate') {
+            const pc = pcRef.current;
+            const candidate = payload.candidate;
+
+            if (!candidate) return;
+
+            if (!pc || !pc.remoteDescription) {
+                // Buffer candidates that arrive before remote description is set
+                pendingCandidatesRef.current.push(candidate);
+                return;
+            }
+
+            try {
+                await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (e) {
+                console.warn('Failed to add ICE candidate:', e);
+            }
+
+        } else if (type === 'call_end') {
+            // Remote party ended or rejected the call
+            cleanupPeerConnection();
+            setCallState(prev => {
+                if (prev.localStream) prev.localStream.getTracks().forEach(t => t.stop());
+                if (prev.remoteStream) prev.remoteStream.getTracks().forEach(t => t.stop());
+                return { ...INITIAL_CALL_STATE };
+            });
+            localStreamRef.current = null;
+
+            if (payload?.reason === 'busy') {
+                alert('The person you are calling is currently on another call.');
+            }
         }
+    }, [userId, createPeerConnection, cleanupPeerConnection, sendSignal]);
 
-        setCallState(prev => {
-            // Explicitly stop all tracks to release hardware
-            if (prev.localStream) {
-                prev.localStream.getTracks().forEach(t => t.stop());
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (pcRef.current) {
+                pcRef.current.onicecandidate = null;
+                pcRef.current.ontrack = null;
+                pcRef.current.oniceconnectionstatechange = null;
+                pcRef.current.close();
+                pcRef.current = null;
             }
-            if (prev.remoteStream) {
-                prev.remoteStream.getTracks().forEach(t => t.stop());
+            if (localStreamRef.current) {
+                localStreamRef.current.getTracks().forEach(t => t.stop());
+                localStreamRef.current = null;
             }
-
-            return {
-                ...INITIAL_CALL_STATE
-            };
-        });
+        };
     }, []);
 
-    return { callState, startCall, answerCall, endCall };
+    return { callState, startCall, answerCall, endCall, handleSignalingMessage };
 };

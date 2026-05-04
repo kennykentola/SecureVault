@@ -276,8 +276,7 @@ export const Dashboard: React.FC = () => {
         return userId;
     }, [networkUsers, selectedChat, user?.email, user?.name, user?.$id]);
 
-    const { callState, startCall, answerCall, endCall } = useWebRTC(user?.$id, resolveCallDisplayName);
-    const scrollRef = useRef<HTMLDivElement>(null);
+    const handleSignalingRef = useRef<((msg: any) => void) | null>(null);
 
     const { status: wsStatus, sendMessage } = useWebSocket(user?.$id, (msg) => {
         if (msg.type === 'chat') handleIncomingMessage(msg);
@@ -288,7 +287,18 @@ export const Dashboard: React.FC = () => {
         else if (msg.type === 'status_update') handleStatusUpdate(msg);
         else if (msg.type === 'key_sync_request') handleKeySyncRequest(msg);
         else if (msg.type === 'key_sync_delivery') handleKeySyncDelivery(msg);
+        else if (msg.type === 'offer' || msg.type === 'answer' || msg.type === 'candidate' || msg.type === 'call_end') {
+            handleSignalingRef.current?.(msg);
+        }
     });
+
+    const { callState, startCall, answerCall, endCall, handleSignalingMessage } = useWebRTC(user?.$id, resolveCallDisplayName, sendMessage);
+
+    useEffect(() => {
+        handleSignalingRef.current = handleSignalingMessage;
+    }, [handleSignalingMessage]);
+
+    const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         fetchInitialData();
