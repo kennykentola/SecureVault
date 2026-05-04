@@ -60,7 +60,7 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
             if (isCancelled || peerRef.current) return;
 
             const newPeer = new Peer(userId, {
-                debug: 3,
+                debug: 1,
                 config: {
                     iceServers: [
                         { urls: 'stun:stun.l.google.com:19302' },
@@ -113,8 +113,18 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
                     });
 
                 } else if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
-                    // Transient connectivity issue — log only, PeerJS will reconnect
-                    console.warn('PeerJS transient error:', err.type, '— will reconnect automatically.');
+                    // PeerJS does NOT auto-reconnect — we must trigger it ourselves
+                    console.warn('PeerJS connection lost:', err.type, '— will attempt reconnect via disconnected handler.');
+                    if (!newPeer.destroyed && !newPeer.disconnected) {
+                        // Peer object is still connected; the disconnected event will fire next
+                    } else if (!newPeer.destroyed) {
+                        // Already disconnected — try an immediate reconnect
+                        try {
+                            newPeer.reconnect();
+                        } catch (reconnectErr) {
+                            console.warn('PeerJS reconnect() failed:', reconnectErr);
+                        }
+                    }
 
                 } else {
                     // Unknown / fatal error
@@ -141,10 +151,58 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
                 currentCall.current = call;
             });
 
+            // 'disconnected' fires when the signaling WebSocket drops but the peer
+            // is still usable — attempt reconnect with exponential backoff
+            newPeer.on('disconnected', () => {
+                if (isCancelled || peerRef.current !== newPeer) return;
+                console.warn('PeerJS disconnected from signaling server — attempting reconnect...');
+                let attempts = 0;
+                const maxAttempts = 5;
+                const tryReconnect = () => {
+                    if (isCancelled || peerRef.current !== newPeer || newPeer.destroyed) return;
+                    if (newPeer.open) {
+                        console.log('PeerJS reconnected successfully.');
+                        return;
+                    }
+                    if (attempts >= maxAttempts) {
+                        console.warn('PeerJS reconnect failed after', maxAttempts, 'attempts. Doing full re-init...');
+                        newPeer.destroy();
+                        if (peerRef.current === newPeer) {
+                            peerRef.current = null;
+                            setPeer(null);
+                        }
+                        if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
+                        retryTimerRef.current = window.setTimeout(() => {
+                            if (!isCancelled) initPeer();
+                        }, 2000);
+                        return;
+                    }
+                    attempts++;
+                    try {
+                        newPeer.reconnect();
+                    } catch (e) {
+                        console.warn('PeerJS reconnect() threw:', e);
+                    }
+                    if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
+                    retryTimerRef.current = window.setTimeout(tryReconnect, Math.min(1000 * Math.pow(2, attempts - 1), 8000));
+                };
+                if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
+                retryTimerRef.current = window.setTimeout(tryReconnect, 1000);
+            });
+
+            // 'close' fires when the peer is fully destroyed — do a fresh re-init
             newPeer.on('close', () => {
                 if (peerRef.current === newPeer) {
                     peerRef.current = null;
                     setPeer(null);
+                }
+                // Auto re-init unless the component is unmounting
+                if (!isCancelled) {
+                    console.log('PeerJS peer closed. Re-initializing in 2s...');
+                    if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
+                    retryTimerRef.current = window.setTimeout(() => {
+                        if (!isCancelled) initPeer();
+                    }, 2000);
                 }
             });
 
@@ -207,7 +265,7 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
 
             const call = peer.call(remoteId, stream, { metadata: { video: type === 'video' } });
             currentCall.current = call;
-            
+
             setCallState(prev => ({
                 ...prev,
                 isOutgoing: true,
@@ -280,7 +338,7 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
             currentCall.current.close();
             currentCall.current = null;
         }
-        
+
         setCallState(prev => {
             // Explicitly stop all tracks to release hardware
             if (prev.localStream) {
@@ -289,7 +347,7 @@ export const useWebRTC = (userId: string | undefined, resolveDisplayName?: (user
             if (prev.remoteStream) {
                 prev.remoteStream.getTracks().forEach(t => t.stop());
             }
-            
+
             return {
                 ...INITIAL_CALL_STATE
             };

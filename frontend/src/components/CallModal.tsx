@@ -18,6 +18,8 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
     const [cameraOff, setCameraOff] = React.useState(false);
     const [localVideoReady, setLocalVideoReady] = React.useState(false);
     const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
+    const pollTimers = React.useRef<Map<HTMLVideoElement, number>>(new Map());
+
     const attachStream = React.useCallback((
         video: HTMLVideoElement | null,
         stream: MediaStream | null,
@@ -25,6 +27,14 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
         onReady?: (ready: boolean) => void
     ) => {
         if (!video) return;
+
+        // Clear any previous polling timer for this video element
+        const prevTimer = pollTimers.current.get(video);
+        if (prevTimer) {
+            window.clearInterval(prevTimer);
+            pollTimers.current.delete(video);
+        }
+
         if (!stream) {
             video.srcObject = null;
             onReady?.(false);
@@ -37,6 +47,21 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
         video.autoplay = true;
         video.preload = 'auto';
 
+        let resolved = false;
+        const markReady = () => {
+            if (resolved) return;
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+                resolved = true;
+                onReady?.(true);
+                // Clean up polling
+                const timer = pollTimers.current.get(video);
+                if (timer) {
+                    window.clearInterval(timer);
+                    pollTimers.current.delete(video);
+                }
+            }
+        };
+
         const tryPlay = () => {
             video.play().catch((error: any) => {
                 if (error?.name !== 'AbortError' && error?.name !== 'NotAllowedError') {
@@ -45,23 +70,44 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
             });
         };
 
+        // Listen to all relevant events
+        video.onloadedmetadata = () => { tryPlay(); markReady(); };
+        video.onloadeddata = () => markReady();
+        video.onplaying = () => markReady();
+        // 'resize' fires when the intrinsic video dimensions change (first frame decoded)
+        video.onresize = () => markReady();
+
+        // If already ready, play immediately
         if (video.readyState >= 2) {
             tryPlay();
-            if (video.videoWidth > 0 && video.videoHeight > 0) {
-                onReady?.(true);
-            }
-            return;
+            markReady();
+        } else {
+            tryPlay();
         }
 
-        const onLoaded = () => {
-            tryPlay();
-            onReady?.(video.videoWidth > 0 && video.videoHeight > 0);
-        };
-        const onPlaying = () => onReady?.(video.videoWidth > 0 && video.videoHeight > 0);
-        video.onloadedmetadata = onLoaded;
-        video.onloadeddata = onPlaying;
-        video.onplaying = onPlaying;
+        // Polling fallback: check every 250ms for up to 15 seconds
+        // This catches edge cases where events fire before dimensions are available
+        let elapsed = 0;
+        const pollId = window.setInterval(() => {
+            elapsed += 250;
+            markReady();
+            if (resolved || elapsed >= 15000) {
+                window.clearInterval(pollId);
+                pollTimers.current.delete(video);
+            }
+        }, 250);
+        pollTimers.current.set(video, pollId);
     }, []);
+
+    // Clean up polling timers on unmount
+    React.useEffect(() => {
+        const timers = pollTimers.current;
+        return () => {
+            timers.forEach(id => window.clearInterval(id));
+            timers.clear();
+        };
+    }, []);
+
     React.useLayoutEffect(() => {
         const video = localVideoRef.current;
         if (!video) return;
