@@ -39,7 +39,26 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     const longPressTimerRef = React.useRef<number | null>(null);
     const mediaType = msg.type || msg.mediaData?.type;
     const fileId = msg.fileId || msg.file_id || msg.mediaData?.fileId || msg.mediaData?.file_id;
-    const fileName = msg.fileName || msg.filename || msg.mediaData?.fileName || msg.mediaData?.file_name;
+    const fileName = msg.fileName || msg.filename || msg.mediaData?.fileName || msg.mediaData?.file_name || msg.mediaData?.name || (msg.text?.includes('File: ') ? msg.text.split('File: ')[1] : '');
+    
+    useEffect(() => {
+        if (msg.type === 'file' || msg.type === 'voice') {
+            console.log(`[MessageBubble] Rendering ${msg.type}:`, {
+                id: msg.$id,
+                fileName,
+                hasMediaData: !!msg.mediaData,
+                hasDecryptedKey: !!(msg.mediaData?.decryptedKeyBase64 || msg.decryptedKeyBase64),
+                fullMsg: msg
+            });
+        }
+    }, [msg.$id]);
+
+    // Auto-decrypt images
+    useEffect(() => {
+        if (mediaType === 'file' && isPreviewable && !decryptedUrl && !isDecrypting && rawKeyBase64 && iv) {
+            handleMediaAction();
+        }
+    }, [mediaType, isPreviewable, decryptedUrl, isDecrypting, rawKeyBase64, iv]);
     const iv = msg.iv || msg.mediaData?.iv || msg.mediaData?.iv_b64;
     const durationLabel = msg.duration || msg.mediaData?.duration;
     const rawKeyBase64 = msg.decryptedKeyBase64 || msg.mediaData?.decryptedKeyBase64;

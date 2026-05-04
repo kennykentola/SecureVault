@@ -1512,6 +1512,7 @@ export const Dashboard: React.FC = () => {
                     let mediaData: any = null;
                     let resolvedPayload: any = {};
                     const isMedia = m.type === 'voice' || m.type === 'file';
+                    console.log(`[E2EE] Processing message ${m.$id} (Type: ${m.type}, Media: ${isMedia})`);
 
                     if (!availablePrivateKeys.length && !isGroup) {
                         text = "[Vault Locked]";
@@ -1600,11 +1601,13 @@ export const Dashboard: React.FC = () => {
                             }
                             
                             if (isMedia) {
+                                console.log(`[E2EE] Decrypting media key for ${m.$id} using DM key source...`);
                                 const decryptedKeyBase64 = await withPrivateKeyFallback((candidateKey) => (
                                     HybridEncryptor.decryptKeyWithRSA(dmKeyToUse, candidateKey)
                                 ));
                                 mediaData = { ...m, ...msgPayload, decryptedKeyBase64 };
                             } else {
+                                console.log(`[E2EE] Decrypting text message ${m.$id}...`);
                                 text = await withPrivateKeyFallback((candidateKey) => (
                                     HybridEncryptor.decrypt({
                                         ...m,
@@ -1615,6 +1618,7 @@ export const Dashboard: React.FC = () => {
                                 ));
                             }
                         } catch (decErr: any) {
+                            console.error(`[E2EE] DM Decryption failed for message ${m.$id}:`, decErr);
                             const isMismatch = decErr.name === "OperationError" || decErr.message === 'IDENTITY_MISMATCH';
 
                             if (isMismatch) {
@@ -1632,6 +1636,7 @@ export const Dashboard: React.FC = () => {
                     return { 
                         ...m, 
                         ...resolvedPayload,
+                        fileName: resolvedPayload.fileName || m.fileName || m.filename || (resolvedPayload.text?.startsWith('File: ') ? resolvedPayload.text.replace('File: ', '') : null),
                         text: text || ((resolvedPayload.type || m.type) === 'voice' ? 'Voice message' : `File: ${resolvedPayload.fileName || m.fileName || m.filename || 'Attachment'}`),
                         mediaData,
                         latency: HybridEncryptor.metrics.lastDecryptionTime

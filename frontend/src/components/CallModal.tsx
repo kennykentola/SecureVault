@@ -63,11 +63,13 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
         };
 
         const tryPlay = () => {
-            video.play().catch((error: any) => {
-                if (error?.name !== 'AbortError' && error?.name !== 'NotAllowedError') {
-                    console.warn("Video playback failed", error);
-                }
-            });
+            if (video.paused && video.srcObject) {
+                video.play().catch((error: any) => {
+                    if (error?.name !== 'AbortError' && error?.name !== 'NotAllowedError') {
+                        console.warn("Video playback failed", error);
+                    }
+                });
+            }
         };
 
         // Listen to all relevant events
@@ -90,7 +92,6 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
         let elapsed = 0;
         const pollId = window.setInterval(() => {
             elapsed += 250;
-            tryPlay();
             markReady();
             if (resolved || elapsed >= 15000) {
                 window.clearInterval(pollId);
