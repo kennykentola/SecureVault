@@ -26,9 +26,16 @@ const initDB = (): Promise<IDBDatabase> => {
 const safeAtob = (str: string): string => {
     try {
         if (!str) return '';
-        // Remove any whitespace, newlines, or tabs that might have been injected
-        const clean = str.trim().replace(/\s/g, '');
-        return atob(clean);
+        let target = str.trim().replace(/\s/g, '');
+
+        if (target.startsWith('{')) {
+            try {
+                const parsed = JSON.parse(target);
+                target = (parsed.encryptedKey || parsed.ciphertext || parsed.encrypted_key || target).trim().replace(/\s/g, '');
+            } catch (e) { /* ignore */ }
+        }
+
+        return atob(target);
     } catch (e) {
         console.warn("[KeyManager] Malformed Base64 string detected");
         throw new Error("INVALID_BASE64_ENCODING");

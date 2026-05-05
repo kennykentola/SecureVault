@@ -9,11 +9,24 @@ export const HybridEncryptor = {
     // Helper: Safe Base64 decoding to prevent crashes on malformed strings
     safeAtob: (str: string): string => {
         try {
-            // Remove any whitespace, newlines, or tabs that might have been injected
-            const clean = str.trim().replace(/\s/g, '');
-            return atob(clean);
+            if (!str) return '';
+            
+            let target = str.trim().replace(/\s/g, '');
+            
+            // Self-healing: If the string is actually a JSON object (common in legacy/corrupted records)
+            // extract the encryptedKey or ciphertext field if it exists.
+            if (target.startsWith('{')) {
+                try {
+                    const parsed = JSON.parse(target);
+                    target = (parsed.encryptedKey || parsed.ciphertext || parsed.encrypted_key || target).trim().replace(/\s/g, '');
+                } catch (e) {
+                    // Not valid JSON, continue with raw string
+                }
+            }
+            
+            return atob(target);
         } catch (e) {
-            console.warn("[E2EE] Malformed Base64 string detected:", str.slice(0, 20) + "...");
+            console.warn("[E2EE] Malformed Base64 string detected:", str.slice(0, 40) + "...");
             throw new Error("INVALID_BASE64_ENCODING");
         }
     },

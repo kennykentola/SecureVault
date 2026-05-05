@@ -81,6 +81,12 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                     console.warn(`[CallModal] Failed to play existing stream on ${isLocal ? 'local' : 'remote'} video`, e);
                 }
             }
+            
+            // Critical: Still check if we need to mark it as ready
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+                if (isLocal) setLocalVideoReady(true);
+                else setRemoteVideoReady(true);
+            }
             return;
         }
 
