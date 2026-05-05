@@ -158,22 +158,8 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
     React.useLayoutEffect(() => {
         const video = remoteVideoRef.current;
         if (!video) return;
-        // Correcting arguments: remote stream is NOT local video
         attachStream(video, callState.remoteStream, false);
-
-        // Fallback: If remote video is not ready within 2 seconds of call being active,
-        // re-verify track availability and try playing again.
-        const timer = setTimeout(() => {
-            if (callState.isActive && !remoteVideoReady && callState.remoteStream) {
-                const hasVideo = callState.remoteStream.getVideoTracks().length > 0;
-                console.log(`[CallModal] Video recovery check: hasVideoTracks=${hasVideo}`);
-                if (hasVideo && video.paused) {
-                    video.play().catch(e => console.warn("Recovery play failed", e));
-                }
-            }
-        }, 2000);
-        return () => clearTimeout(timer);
-    }, [attachStream, callState.remoteStream, callState.isActive, remoteVideoReady]);
+    }, [attachStream, callState.remoteStream, callState.isActive]); // Removed remoteVideoReady from dependencies to prevent loops
 
     React.useEffect(() => {
         const audio = remoteAudioRef.current;
@@ -234,8 +220,10 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                 : '';
     const hasRemoteStream = callState.callType === 'video' && !!callState.remoteStream;
     const hasLocalStream = callState.callType === 'video' && !!callState.localStream;
-    const showRemoteVideo = hasRemoteStream && remoteVideoReady;
-    const showLocalVideo = hasLocalStream && localVideoReady;
+    const showRemoteVideo = hasRemoteStream; // Show video container if stream exists
+    const isRemoteReady = remoteVideoReady; // Use ready state only for overlay
+    const showLocalVideo = hasLocalStream;
+    const isLocalReady = localVideoReady;
 
     const handleSwipeDismiss = (_event: any, info: { offset: { y: number }, velocity: { y: number } }) => {
         const shouldDismiss = info.offset.y > 120 || info.velocity.y > 900;
@@ -456,10 +444,9 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                             ref={remoteVideoRef}
                                             autoPlay
                                             playsInline
-                                            muted
                                             className={`absolute inset-0 w-full h-full object-cover transition-all duration-700 ${showRemoteVideo ? 'opacity-100 scale-100 blur-0' : 'opacity-0 scale-105 blur-2xl'}`}
                                         />
-                                        {!showRemoteVideo && (
+                                        {!isRemoteReady && showRemoteVideo && (
                                             <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center z-10">
                                                 <div className="relative mb-8">
                                                     <RingPulse />
@@ -475,8 +462,9 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                                         whileHover={{ scale: 1.05 }}
                                                         whileTap={{ scale: 0.95 }}
                                                         onClick={() => {
-                                                            const v = remoteVideoRef.current;
-                                                            if (v) { v.load(); v.play().catch(() => {}); }
+                                                            if (remoteVideoRef.current) {
+                                                                attachStream(remoteVideoRef.current, callState.remoteStream, false);
+                                                            }
                                                         }}
                                                         className="mt-6 px-6 py-2.5 bg-white/10 hover:bg-white/20 rounded-full text-xs font-black uppercase tracking-widest border border-white/10 transition-all"
                                                     >
