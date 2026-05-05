@@ -1600,7 +1600,19 @@ export const Dashboard: React.FC = () => {
                                 if (senderKey) dmKeyToUse = senderKey;
                             }
                             
-                            if (isMedia) {
+                            if (m.type === 'call') {
+                                // Call logs are often stored as plain markers for backward compatibility
+                                text = (typeof m.text === 'string' && m.text.startsWith('CALL_LOG_')) ? m.text : (m.text || "Call log sync");
+                                if (text.startsWith('CALL_LOG_')) {
+                                    // Map to user friendly text if needed, or just return it
+                                    text = text.replace(/CALL_LOG_/g, '').replace(/_/g, ' ');
+                                } else if (!m.text && m.encrypted_text) {
+                                    // If it's a newer call log that IS encrypted, proceed to decrypt
+                                    text = await withPrivateKeyFallback((candidateKey) => (
+                                        HybridEncryptor.decrypt({ ...m, ...msgPayload, encryptedKey: dmKeyToUse }, candidateKey)
+                                    ));
+                                }
+                            } else if (isMedia) {
                                 console.log(`[E2EE] Decrypting media key for ${m.$id} using DM key source...`);
                                 const decryptedKeyBase64 = await withPrivateKeyFallback((candidateKey) => (
                                     HybridEncryptor.decryptKeyWithRSA(dmKeyToUse, candidateKey)

@@ -24,6 +24,11 @@ export const HybridEncryptor = {
                 }
             }
             
+            // Skip decoding for internal markers (not Base64)
+            if (target.startsWith('CALL_LOG_') || target.length < 4) {
+                return target;
+            }
+            
             return atob(target);
         } catch (e) {
             console.warn("[E2EE] Malformed Base64 string detected:", str.slice(0, 40) + "...");
