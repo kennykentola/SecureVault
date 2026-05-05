@@ -22,6 +22,19 @@ const initDB = (): Promise<IDBDatabase> => {
     });
 };
 
+// Helper: Safe Base64 decoding to prevent crashes on malformed strings
+const safeAtob = (str: string): string => {
+    try {
+        if (!str) return '';
+        // Remove any whitespace, newlines, or tabs that might have been injected
+        const clean = str.trim().replace(/\s/g, '');
+        return atob(clean);
+    } catch (e) {
+        console.warn("[KeyManager] Malformed Base64 string detected");
+        throw new Error("INVALID_BASE64_ENCODING");
+    }
+};
+
 export const KeyManager = {
     // Generate RSA Key Pair
     generateKeyPair: async (): Promise<CryptoKeyPair> => {
@@ -47,7 +60,7 @@ export const KeyManager = {
     importPublicKey: async (base64Key: string): Promise<CryptoKey> => {
         try {
             if (!base64Key) throw new Error("Public key is empty");
-            const binaryKey = atob(base64Key);
+            const binaryKey = safeAtob(base64Key);
             const bytes = new Uint8Array(binaryKey.length);
             for (let i = 0; i < binaryKey.length; i++) {
                 bytes[i] = binaryKey.charCodeAt(i);
@@ -79,7 +92,7 @@ export const KeyManager = {
 
     // Import Secret Key from Base64
     importSecretKey: async (base64Key: string, algo: "AES-CBC" | "AES-GCM" = "AES-CBC"): Promise<CryptoKey> => {
-        const binaryKey = atob(base64Key);
+        const binaryKey = safeAtob(base64Key);
         const bytes = new Uint8Array(binaryKey.length);
         for (let i = 0; i < binaryKey.length; i++) {
             bytes[i] = binaryKey.charCodeAt(i);
@@ -291,9 +304,9 @@ export const KeyManager = {
     restorePrivateKeyFromBackup: async (backupJson: string, pin: string): Promise<CryptoKey> => {
         try {
             const data = JSON.parse(backupJson);
-            const encryptedKey = new Uint8Array(atob(data.encryptedKey).split('').map(c => c.charCodeAt(0)));
-            const iv = new Uint8Array(atob(data.iv).split('').map(c => c.charCodeAt(0)));
-            const salt = new Uint8Array(atob(data.salt).split('').map(c => c.charCodeAt(0)));
+            const encryptedKey = new Uint8Array(safeAtob(data.encryptedKey).split('').map(c => c.charCodeAt(0)));
+            const iv = new Uint8Array(safeAtob(data.iv).split('').map(c => c.charCodeAt(0)));
+            const salt = new Uint8Array(safeAtob(data.salt).split('').map(c => c.charCodeAt(0)));
 
             const pinKey = await KeyManager.derivePinKey(pin, salt);
             const decrypted = await window.crypto.subtle.decrypt(
@@ -386,9 +399,9 @@ export const KeyManager = {
     restorePrivateKeyFromRecoveryBackup: async (backupJson: string, recoveryKey: string): Promise<CryptoKey> => {
         try {
             const data = JSON.parse(backupJson);
-            const encryptedKey = new Uint8Array(atob(data.encryptedKey).split('').map(c => c.charCodeAt(0)));
-            const iv = new Uint8Array(atob(data.iv).split('').map(c => c.charCodeAt(0)));
-            const salt = new Uint8Array(atob(data.salt).split('').map(c => c.charCodeAt(0)));
+            const encryptedKey = new Uint8Array(safeAtob(data.encryptedKey).split('').map(c => c.charCodeAt(0)));
+            const iv = new Uint8Array(safeAtob(data.iv).split('').map(c => c.charCodeAt(0)));
+            const salt = new Uint8Array(safeAtob(data.salt).split('').map(c => c.charCodeAt(0)));
 
             const aesKey = await KeyManager.deriveRecoveryAesKey(recoveryKey, salt);
             const decrypted = await window.crypto.subtle.decrypt(

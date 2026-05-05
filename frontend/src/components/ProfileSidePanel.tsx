@@ -94,7 +94,7 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
             if (!response.ok) throw new Error("Download failed");
             const fileBlob = await response.blob();
 
-            const rawKey = new Uint8Array(atob(rawKeyBase64).split('').map(c => c.charCodeAt(0)));
+            const rawKey = new Uint8Array(HybridEncryptor.safeAtob(rawKeyBase64).split('').map(c => c.charCodeAt(0)));
             const aesKey = await window.crypto.subtle.importKey(
                 "raw", rawKey, { name: "AES-GCM" }, true, ["decrypt"]
             );

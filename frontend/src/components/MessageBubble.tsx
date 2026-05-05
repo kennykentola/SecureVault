@@ -191,7 +191,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             // 2. Import the wrapped key and decrypt it to get the file AES key
             if (!rawKeyBase64) throw new Error("No decryption key available");
 
-            const rawKey = new Uint8Array(atob(rawKeyBase64).split('').map(c => c.charCodeAt(0)));
+            const rawKey = new Uint8Array(HybridEncryptor.safeAtob(rawKeyBase64).split('').map(c => c.charCodeAt(0)));
             const aesKey = await window.crypto.subtle.importKey(
                 "raw", rawKey, { name: "AES-GCM" }, true, ["decrypt"]
             );

@@ -6,12 +6,23 @@ export const HybridEncryptor = {
         hashingType: "SHA-256"
     },
 
+    // Helper: Safe Base64 decoding to prevent crashes on malformed strings
+    safeAtob: (str: string): string => {
+        try {
+            // Remove any whitespace, newlines, or tabs that might have been injected
+            const clean = str.trim().replace(/\s/g, '');
+            return atob(clean);
+        } catch (e) {
+            console.warn("[E2EE] Malformed Base64 string detected:", str.slice(0, 20) + "...");
+            throw new Error("INVALID_BASE64_ENCODING");
+        }
+    },
+
     // 1. Core Logic: Encrypt a symmetric key for a specific RSA public key
     encryptKeyWithRSA: async (rawAesKey: ArrayBuffer | string, publicKey: CryptoKey): Promise<string> => {
         let buffer: ArrayBuffer;
         if (typeof rawAesKey === 'string') {
-            // Convert Base64 string to ArrayBuffer
-            const binary = atob(rawAesKey);
+            const binary = HybridEncryptor.safeAtob(rawAesKey);
             const bytes = new Uint8Array(binary.length);
             for (let i = 0; i < binary.length; i++) {
                 bytes[i] = binary.charCodeAt(i);
@@ -58,8 +69,12 @@ export const HybridEncryptor = {
     decryptSymmetric: async (payload: any, aesKey: CryptoKey) => {
         const startTime = performance.now();
         try {
-            const ciphertextBuffer = new Uint8Array(atob(payload.ciphertext).split('').map(c => c.charCodeAt(0)));
-            const ivBuffer = new Uint8Array(atob(payload.iv || payload.iv_b64).split('').map(c => c.charCodeAt(0)));
+            const ciphertextBinary = HybridEncryptor.safeAtob(payload.ciphertext);
+            const ciphertextBuffer = new Uint8Array(ciphertextBinary.split('').map(c => c.charCodeAt(0)));
+            
+            const ivStr = payload.iv || payload.iv_b64;
+            const ivBinary = HybridEncryptor.safeAtob(ivStr);
+            const ivBuffer = new Uint8Array(ivBinary.split('').map(c => c.charCodeAt(0)));
             
             const algoName = aesKey.algorithm.name;
             const decryptedBuffer = await window.crypto.subtle.decrypt(
@@ -107,13 +122,19 @@ export const HybridEncryptor = {
 
     // 4. Core Logic: Decrypt a symmetric key byte-array with RSA private key
     decryptKeyWithRSA: async (encryptedKeyB64: string, privateKey: CryptoKey): Promise<string> => {
-        const encryptedBuffer = new Uint8Array(atob(encryptedKeyB64).split('').map(c => c.charCodeAt(0)));
-        const rawKey = await window.crypto.subtle.decrypt(
-            { name: "RSA-OAEP" },
-            privateKey,
-            encryptedBuffer
-        );
-        return btoa(String.fromCharCode(...new Uint8Array(rawKey)));
+        try {
+            const binary = HybridEncryptor.safeAtob(encryptedKeyB64);
+            const encryptedBuffer = new Uint8Array(binary.split('').map(c => c.charCodeAt(0)));
+            const rawKey = await window.crypto.subtle.decrypt(
+                { name: "RSA-OAEP" },
+                privateKey,
+                encryptedBuffer
+            );
+            return btoa(String.fromCharCode(...new Uint8Array(rawKey)));
+        } catch (e) {
+            console.warn("[E2EE] decryptKeyWithRSA failed. Malformed Base64 or Key mismatch.", e);
+            throw e;
+        }
     },
 
     // 5. Convenience: Decrypt message using own private key
@@ -127,9 +148,10 @@ export const HybridEncryptor = {
 
             // 1. Decrypt the AES key using RSA private key
             const decryptedKeyB64 = await HybridEncryptor.decryptKeyWithRSA(encKey, privateKey);
+            const aesKeyBinary = HybridEncryptor.safeAtob(decryptedKeyB64);
             const aesKey = await window.crypto.subtle.importKey(
                 "raw",
-                new Uint8Array(atob(decryptedKeyB64).split('').map(c => c.charCodeAt(0))),
+                new Uint8Array(aesKeyBinary.split('').map(c => c.charCodeAt(0))),
                 { name: "AES-CBC" },
                 true,
                 ["decrypt"]
@@ -150,7 +172,7 @@ export const HybridEncryptor = {
     tamperPayload: (payload: any) => {
         const tampered = { ...payload };
         try {
-            const binary = atob(tampered.ciphertext);
+            const binary = HybridEncryptor.safeAtob(tampered.ciphertext);
             const bytes = new Uint8Array(binary.length);
             for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
             
@@ -186,7 +208,8 @@ export const HybridEncryptor = {
 
     decryptFile: async (fileBlob: Blob, aesKey: CryptoKey, ivB64: string, mimeType?: string) => {
         const arrayBuffer = await fileBlob.arrayBuffer();
-        const iv = new Uint8Array(atob(ivB64).split('').map(c => c.charCodeAt(0)));
+        const ivBinary = HybridEncryptor.safeAtob(ivB64);
+        const iv = new Uint8Array(ivBinary.split('').map(c => c.charCodeAt(0)));
         const decrypted = await window.crypto.subtle.decrypt(
             { name: "AES-GCM", iv },
             aesKey,

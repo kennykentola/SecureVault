@@ -944,7 +944,7 @@ export const Dashboard: React.FC = () => {
             const decryptedKeyB64 = await withPrivateKeyFallback((candidateKey) => (
                 HybridEncryptor.decryptKeyWithRSA(group.encrypted_group_key, candidateKey)
             ));
-            const rawKey = Uint8Array.from(atob(decryptedKeyB64), c => c.charCodeAt(0)).buffer;
+            const rawKey = Uint8Array.from(HybridEncryptor.safeAtob(decryptedKeyB64), c => c.charCodeAt(0)).buffer;
 
             // 2. Fetch the requester's latest public key
             const userRes = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, APPWRITE_CONFIG.COLLECTION_USERS, [

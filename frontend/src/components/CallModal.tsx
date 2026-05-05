@@ -69,89 +69,69 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
     const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
     const pollTimers = React.useRef<Map<HTMLVideoElement, number>>(new Map());
 
-    const attachStream = React.useCallback((
-        video: HTMLVideoElement | null,
-        stream: MediaStream | null,
-        muted = false,
-        onReady?: (ready: boolean) => void
-    ) => {
+    const attachStream = React.useCallback(async (video: HTMLVideoElement | null, stream: MediaStream | null, isLocal: boolean = false) => {
         if (!video) return;
-
-        // Clear any previous polling timer for this video element
-        const prevTimer = pollTimers.current.get(video);
-        if (prevTimer) {
-            window.clearInterval(prevTimer);
-            pollTimers.current.delete(video);
-        }
-
-        if (!stream) {
-            if (video.srcObject !== null) {
-                video.srcObject = null;
-                onReady?.(false);
+        
+        // Prevent redundant resets which cause flickering and AbortErrors
+        if (video.srcObject === stream && stream !== null) {
+            if (video.paused) {
+                try {
+                    await video.play();
+                } catch (e) {
+                    console.warn(`[CallModal] Failed to play existing stream on ${isLocal ? 'local' : 'remote'} video`, e);
+                }
             }
             return;
         }
 
-        if (video.srcObject !== stream) {
+        console.log(`[CallModal] Attaching ${isLocal ? 'local' : 'remote'} stream with ${stream?.getTracks().length || 0} tracks`);
+        
+        if (!stream) {
+            video.srcObject = null;
+            if (isLocal) setLocalVideoReady(false);
+            else setRemoteVideoReady(false);
+            return;
+        }
+
+        try {
             video.srcObject = stream;
-            video.muted = muted;
+            video.muted = isLocal; // Local always muted
             video.playsInline = true;
             video.autoplay = true;
-            video.preload = 'auto';
-        }
 
-        let resolved = false;
-        const markReady = () => {
-            if (resolved) return;
-            if (video.videoWidth > 0 && video.videoHeight > 0) {
-                resolved = true;
-                onReady?.(true);
-                // Clean up polling
-                const timer = pollTimers.current.get(video);
-                if (timer) {
-                    window.clearInterval(timer);
-                    pollTimers.current.delete(video);
+            const markReady = () => {
+                if (video.videoWidth > 0 && video.videoHeight > 0) {
+                    console.log(`[CallModal] ${isLocal ? 'Local' : 'Remote'} video READY: ${video.videoWidth}x${video.videoHeight}`);
+                    if (isLocal) setLocalVideoReady(true);
+                    else setRemoteVideoReady(true);
+                    return true;
                 }
-            }
-        };
+                return false;
+            };
 
-        const tryPlay = () => {
-            if (video.paused && video.srcObject) {
-                video.play().catch((error: any) => {
-                    if (error?.name !== 'AbortError' && error?.name !== 'NotAllowedError') {
-                        console.warn("Video playback failed", error);
-                    }
-                });
-            }
-        };
+            video.onloadedmetadata = () => {
+                markReady();
+                video.play().catch(e => console.warn("Auto-play failed", e));
+            };
+            
+            video.onplaying = () => markReady();
+            video.onresize = () => markReady();
 
-        // Listen to all relevant events
-        video.onloadedmetadata = () => { tryPlay(); markReady(); };
-        video.onloadeddata = () => markReady();
-        video.onplaying = () => markReady();
-        // 'resize' fires when the intrinsic video dimensions change (first frame decoded)
-        video.onresize = () => markReady();
+            // Aggressive polling for up to 5 seconds to catch frames
+            let attempts = 0;
+            const checkInt = setInterval(() => {
+                attempts++;
+                if (markReady() || attempts > 20) {
+                    clearInterval(checkInt);
+                }
+            }, 250);
 
-        // If already ready, play immediately
-        if (video.readyState >= 2) {
-            tryPlay();
-            markReady();
-        } else {
-            tryPlay();
+            await video.play().catch(err => {
+                console.warn(`[CallModal] Initial play() catch for ${isLocal ? 'local' : 'remote'}:`, err);
+            });
+        } catch (err) {
+            console.error(`[CallModal] Error attaching ${isLocal ? 'local' : 'remote'} stream:`, err);
         }
-
-        // Polling fallback: check every 250ms for up to 15 seconds
-        // This catches edge cases where events fire before dimensions are available
-        let elapsed = 0;
-        const pollId = window.setInterval(() => {
-            elapsed += 250;
-            markReady();
-            if (resolved || elapsed >= 15000) {
-                window.clearInterval(pollId);
-                pollTimers.current.delete(video);
-            }
-        }, 250);
-        pollTimers.current.set(video, pollId);
     }, []);
 
     // Clean up polling timers on unmount
@@ -172,9 +152,8 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
     React.useLayoutEffect(() => {
         const video = remoteVideoRef.current;
         if (!video) return;
-        // Keep the remote video muted so autoplay is reliable. We route audio through
-        // a dedicated audio element for both voice and video calls.
-        attachStream(video, callState.remoteStream, true, setRemoteVideoReady);
+        // Correcting arguments: remote stream is NOT local video
+        attachStream(video, callState.remoteStream, false);
     }, [attachStream, callState.remoteStream]);
 
     React.useEffect(() => {
@@ -192,7 +171,10 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
     }, [callState.remoteStream]);
 
     React.useEffect(() => {
-        if (!callState.isActive) {
+        // Only start timer if the call is ACTIVE and not ringing/connecting
+        const isActuallyActive = callState.isActive && !callState.isIncoming && !callState.isOutgoing;
+        
+        if (!isActuallyActive) {
             setElapsedSeconds(0);
             return;
         }
@@ -202,7 +184,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
         }, 1000);
 
         return () => window.clearInterval(timer);
-    }, [callState.isActive]);
+    }, [callState.isActive, callState.isIncoming, callState.isOutgoing]);
 
     React.useEffect(() => {
         setMicMuted(false);
