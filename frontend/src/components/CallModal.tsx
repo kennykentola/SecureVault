@@ -146,7 +146,7 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
     React.useLayoutEffect(() => {
         const video = localVideoRef.current;
         if (!video) return;
-        attachStream(video, callState.localStream, true, setLocalVideoReady);
+        attachStream(video, callState.localStream, true);
     }, [attachStream, callState.localStream]);
 
     React.useLayoutEffect(() => {
