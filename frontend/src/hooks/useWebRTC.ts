@@ -403,6 +403,8 @@ export const useWebRTC = (
 
             try {
                 await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+                // Mark call as active once the answer is accepted on the caller's side
+                setCallState(prev => ({ ...prev, isActive: true }));
             } catch (e) {
                 console.error('Failed to set remote answer:', e);
             }

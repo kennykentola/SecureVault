@@ -160,7 +160,20 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
         if (!video) return;
         // Correcting arguments: remote stream is NOT local video
         attachStream(video, callState.remoteStream, false);
-    }, [attachStream, callState.remoteStream]);
+
+        // Fallback: If remote video is not ready within 2 seconds of call being active,
+        // re-verify track availability and try playing again.
+        const timer = setTimeout(() => {
+            if (callState.isActive && !remoteVideoReady && callState.remoteStream) {
+                const hasVideo = callState.remoteStream.getVideoTracks().length > 0;
+                console.log(`[CallModal] Video recovery check: hasVideoTracks=${hasVideo}`);
+                if (hasVideo && video.paused) {
+                    video.play().catch(e => console.warn("Recovery play failed", e));
+                }
+            }
+        }, 2000);
+        return () => clearTimeout(timer);
+    }, [attachStream, callState.remoteStream, callState.isActive, remoteVideoReady]);
 
     React.useEffect(() => {
         const audio = remoteAudioRef.current;

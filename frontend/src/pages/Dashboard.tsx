@@ -117,20 +117,23 @@ export const Dashboard: React.FC = () => {
     );
     const isIdentityMismatchError = (error: any) => error?.name === 'OperationError' || error?.message === 'IDENTITY_MISMATCH';
     const withPrivateKeyFallback = async <T,>(operation: (candidateKey: CryptoKey) => Promise<T>): Promise<T> => {
-        if (!availablePrivateKeys.length) {
-            throw new Error("VAULT_LOCKED");
-        }
-
         let lastError: any = null;
 
-        for (const candidateKey of availablePrivateKeys) {
+        if (availablePrivateKeys.length === 0) {
+            console.warn("[E2EE] No private keys available for fallback decryption.");
+        }
+
+        for (let i = 0; i < availablePrivateKeys.length; i++) {
             try {
-                return await operation(candidateKey);
+                const result = await operation(availablePrivateKeys[i]);
+                if (i > 0) console.log(`[E2EE] Decryption succeeded using legacy key ${i}`);
+                return result;
             } catch (error: any) {
                 lastError = error;
                 if (!isIdentityMismatchError(error)) {
                     throw error;
                 }
+                console.warn(`[E2EE] Key ${i} failed (Identity Mismatch).`);
             }
         }
 
