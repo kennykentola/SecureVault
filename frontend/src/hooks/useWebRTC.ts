@@ -170,12 +170,9 @@ export const useWebRTC = (
             console.log(`[WebRTC] Received remote track: ${event.track.kind}`, event.streams);
             
             setCallState(prev => {
-                let stream = prev.remoteStream;
-                if (!stream) {
-                    stream = event.streams[0] || new MediaStream();
-                }
-
-                // Ensure the track is in our stream
+                const stream = event.streams[0] || (prev.remoteStream || new MediaStream());
+                
+                // If it's a new track, add it if not present
                 if (!stream.getTracks().find(t => t.id === event.track.id)) {
                     stream.addTrack(event.track);
                 }
@@ -183,16 +180,17 @@ export const useWebRTC = (
                 // Monitor track state
                 event.track.onunmute = () => {
                     console.log(`[WebRTC] Remote ${event.track.kind} track unmuted`);
-                    // Force a re-render if needed
-                    setCallState(p => ({ ...p, remoteStream: new MediaStream(stream!.getTracks()) }));
+                    setCallState(p => ({ ...p, remoteStream: new MediaStream(stream.getTracks()) }));
+                };
+
+                event.track.onended = () => {
+                    console.warn(`[WebRTC] Remote ${event.track.kind} track ended`);
                 };
 
                 return {
                     ...prev,
                     isActive: true,
-                    isOutgoing: false,
-                    isIncoming: false,
-                    remoteStream: new MediaStream(stream.getTracks()), // New instance to trigger React update
+                    remoteStream: new MediaStream(stream.getTracks()), 
                 };
             });
         };
@@ -404,7 +402,12 @@ export const useWebRTC = (
             try {
                 await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
                 // Mark call as active once the answer is accepted on the caller's side
-                setCallState(prev => ({ ...prev, isActive: true }));
+                setCallState(prev => ({ 
+                    ...prev, 
+                    isActive: true, 
+                    isOutgoing: false, 
+                    isIncoming: false 
+                }));
             } catch (e) {
                 console.error('Failed to set remote answer:', e);
             }
