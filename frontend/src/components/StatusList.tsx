@@ -131,7 +131,7 @@ export const StatusList: React.FC<StatusListProps> = ({ user, onAdd, onView, ref
                         <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-bold text-lg border-2 ${myStatuses.length > 0 ? 'border-blue-500' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
                             {myStatuses.length > 0 ? (
                                 myStatuses[0].type === 'text' ? (
-                                    <div className="w-full h-full rounded-xl flex items-center justify-center text-xs" style={{ backgroundColor: myStatuses[0].background_color }}>Story</div>
+                                    <div className="status-bg-preview" data-bg-color={myStatuses[0].background_color}>Story</div>
                                 ) : <div className="w-full h-full rounded-xl bg-slate-200" />
                             ) : (user?.username?.[0] || user?.name?.[0] || 'U')}
                         </div>
@@ -142,6 +142,7 @@ export const StatusList: React.FC<StatusListProps> = ({ user, onAdd, onView, ref
                                 onAdd();
                             }}
                             className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-600 rounded-lg flex items-center justify-center border-2 border-white shadow-md text-white group-hover:scale-110 transition-transform"
+                            aria-label="Add status"
                         >
                             <Plus className="w-4 h-4" />
                         </button>
@@ -160,6 +161,7 @@ export const StatusList: React.FC<StatusListProps> = ({ user, onAdd, onView, ref
                                 setShowManage(true);
                             }}
                             className="p-3 hover:bg-slate-100 rounded-2xl text-slate-400 transition-colors"
+                            aria-label="Manage statuses"
                         >
                             <MoreVertical className="w-5 h-5" />
                         </button>
@@ -224,7 +226,7 @@ export const StatusList: React.FC<StatusListProps> = ({ user, onAdd, onView, ref
                     <div className="relative w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
                         <header className="p-6 border-b border-slate-100 flex items-center justify-between">
                             <h3 className="text-lg font-black text-slate-800 italic">Manage Artifacts</h3>
-                            <button onClick={() => setShowManage(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                            <button onClick={() => setShowManage(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors" aria-label="Close">
                                 <X className="w-5 h-5" />
                             </button>
                         </header>
@@ -233,7 +235,7 @@ export const StatusList: React.FC<StatusListProps> = ({ user, onAdd, onView, ref
                                 <div key={s.$id} className="flex items-center gap-4 p-4 bg-slate-50 rounded-3xl border border-slate-100 group">
                                     <div className="w-12 h-12 rounded-2xl bg-slate-200 flex items-center justify-center text-slate-400 overflow-hidden shadow-sm">
                                         {s.type === 'text' ? (
-                                            <div className="w-full h-full flex items-center justify-center text-[8px] font-black uppercase p-1 text-center text-white" style={{ backgroundColor: s.background_color }}>
+                                            <div className="status-bg-preview text-[8px] font-black uppercase p-1" data-bg-color={s.background_color}>
                                                 TEXT
                                             </div>
                                         ) : s.type === 'image' ? (

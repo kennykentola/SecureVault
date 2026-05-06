@@ -252,7 +252,7 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                         {/* Header */}
                         <header className="h-16 px-6 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
                             <div className="flex items-center gap-4">
-                                <button onClick={onClose} className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg">
+                                <button onClick={onClose} className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg" aria-label="Close panel">
                                     <X className="w-5 h-5" />
                                 </button>
                                 <h2 className="text-lg font-bold text-slate-800">{isGroup ? 'Group Info' : 'Contact Info'}</h2>
@@ -374,7 +374,7 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                                             className="aspect-square bg-slate-100 rounded-xl overflow-hidden border border-slate-200 group relative cursor-pointer"
                                                         >
                                                             {m.gif_url ? (
-                                                                <img src={m.gif_url} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                                                                <img src={m.gif_url} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt="GIF attachment" />
                                                             ) : (
                                                                 <div className="w-full h-full flex items-center justify-center text-slate-400 bg-slate-200/50">
                                                                     {(m.originalMimeType || m.original_mime_type || m.mediaData?.originalMimeType || "").startsWith('video/') 
@@ -503,9 +503,9 @@ export const ProfileSidePanel: React.FC<ProfileSidePanelProps> = ({
                                                 <div key={g.$id || g.group_id || g.name} className="flex items-center gap-3">
                                                     <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden flex items-center justify-center text-xs font-bold">
                                                         {g.avatar ? (
-                                                            <img src={g.avatar} className="w-full h-full object-cover" />
+                                                            <img src={g.avatar} className="w-full h-full object-cover" alt={`${g.name} avatar`} />
                                                         ) : g.avatar_id ? (
-                                                            <img src={getAvatarUrl(g.avatar_id)} className="w-full h-full object-cover" />
+                                                            <img src={getAvatarUrl(g.avatar_id)} className="w-full h-full object-cover" alt={`${g.name} avatar`} />
                                                         ) : (
                                                             g.name[0]
                                                         )}

@@ -193,7 +193,7 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
                                 <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1">Temporary E2EE Artifact</p>
                             </div>
                         </div>
-                        <button onClick={onClose} className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg">
+                        <button onClick={onClose} className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg" title="Close" aria-label="Close">
                             <X className="w-6 h-6" />
                         </button>
                     </div>
@@ -243,8 +243,8 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
                                 {statusType === 'text' ? (
                                     <div className="space-y-6">
                                         <div 
-                                            className="w-full aspect-square rounded-[3rem] p-12 flex items-center justify-center transition-colors shadow-inner"
-                                            style={{ backgroundColor: bgColor }}
+                                            className="status-preview-container"
+                                            data-bg-color={bgColor}
                                         >
                                             <textarea 
                                                 className="status-textarea bg-transparent border-none outline-none text-white text-3xl font-black italic text-center w-full placeholder:text-white/50 resize-none h-full flex items-center justify-center"
@@ -258,8 +258,10 @@ export const AddStatusWizard: React.FC<AddStatusWizardProps> = ({ isOpen, onClos
                                                 <button 
                                                     key={bg} 
                                                     onClick={() => setBgColor(bg)}
-                                                    className={`w-10 h-10 rounded-xl transition-all shadow-sm ${bgColor === bg ? 'scale-125 border-4 border-white ring-2 ring-gray-200' : 'hover:scale-110'}`}
-                                                    style={{ backgroundColor: bg }}
+                                                    className={`color-option-btn ${bgColor === bg ? 'active' : ''}`}
+                                                    data-option-bg={bg}
+                                                    title={`Select color ${bg}`}
+                                                    aria-label={`Select color ${bg}`}
                                                 />
                                             ))}
                                         </div>

@@ -2,7 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Reply, Edit2, Trash2, Forward, ShieldAlert, FileText, 
-    Download, Play, Pause, ChevronDown, X, Clock, ShieldCheck, Bug, Zap
+    Download, Play, Pause, ChevronDown, X, Clock, ShieldCheck, Bug, Zap, KeyRound, ArrowRightLeft, FileKey, CheckCircle2
 } from 'lucide-react';
 import { MessageStatus } from './MessageStatus';
 import { storage } from '../lib/appwrite';
@@ -47,6 +47,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     const originalMimeType = msg.originalMimeType || msg.original_mime_type || msg.mediaData?.originalMimeType || msg.mediaData?.original_mime_type || localFile?.type;
     const isPreviewable = originalMimeType?.startsWith('image/') || originalMimeType?.startsWith('video/');
     const durationLabel = msg.duration || msg.mediaData?.duration;
+    const plaintextMessage = typeof msg.text === 'string' && msg.text.trim()
+        ? msg.text
+        : typeof msg.decryptedText === 'string' && msg.decryptedText.trim()
+            ? msg.decryptedText
+            : 'N/A';
+    const encryptedKeyValue = msg.encryptedKey || msg.encrypted_key || msg.mediaData?.encryptedKey || msg.mediaData?.encrypted_key || 'N/A';
+    const integrityVerified = Boolean(msg.hash) && !tamperError;
+    const symmetricAlgorithm = msg.type === 'file' || msg.type === 'voice' ? 'AES-256-GCM' : 'AES-256-CBC';
+    const asymmetricAlgorithm = 'RSA-OAEP 2048';
+    const hashingAlgorithm = 'SHA-256';
     
     React.useEffect(() => {
         if (msg.type === 'file' || msg.type === 'voice') {
@@ -411,33 +421,80 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                                     exit={{ height: 0, opacity: 0 }}
                                     className="mt-3 pt-3 border-t border-white/10 overflow-hidden"
                                 >
-                                    <div className="grid grid-cols-1 gap-2.5">
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {[
+                                                { label: 'Symmetric', value: symmetricAlgorithm, icon: ArrowRightLeft },
+                                                { label: 'Asymmetric', value: asymmetricAlgorithm, icon: KeyRound },
+                                                { label: 'Hashing', value: hashingAlgorithm, icon: FileKey },
+                                                { label: 'Key Exchange', value: 'Hybrid RSA/AES', icon: ShieldCheck },
+                                            ].map((item) => {
+                                                const Icon = item.icon;
+                                                return (
+                                                    <div key={item.label} className="p-2 bg-black/20 rounded-xl border border-white/5">
+                                                        <div className="flex items-center gap-1.5 mb-1">
+                                                            <Icon className="w-3 h-3 opacity-70" />
+                                                            <p className="text-[8px] font-black uppercase tracking-[0.18em] opacity-60">{item.label}</p>
+                                                        </div>
+                                                        <p className="text-[10px] font-mono font-bold break-words">{item.value}</p>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
                                         <div className="space-y-1">
-                                            <p className="text-[9px] font-black uppercase tracking-tighter opacity-60">Visible Ciphertext (Base64)</p>
-                                            <div className="p-2 bg-black/20 rounded font-mono text-[9px] break-all max-h-16 overflow-y-auto leading-tight">
-                                                {msg.ciphertext || "N/A"}
+                                            <p className="text-[9px] font-black uppercase tracking-tighter opacity-60">Plaintext Message</p>
+                                            <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-[10px] leading-tight">
+                                                <div className="rounded-lg bg-black/20 p-2 font-mono text-[10px] break-words text-white/90">
+                                                    {plaintextMessage}
+                                                </div>
                                             </div>
                                         </div>
+
+                                        <div className="space-y-1">
+                                            <p className="text-[9px] font-black uppercase tracking-tighter opacity-60">AES-256-CBC Ciphertext</p>
+                                            <div className="p-2 bg-black/20 rounded-xl font-mono text-[9px] break-all max-h-16 overflow-y-auto leading-tight">
+                                                {msg.ciphertext || 'N/A'}
+                                            </div>
+                                        </div>
+
                                         <div className="grid grid-cols-2 gap-2">
                                             <div className="space-y-1">
                                                 <p className="text-[9px] font-black uppercase tracking-tighter opacity-60">IV (Nonce)</p>
                                                 <div className="p-1.5 bg-black/20 rounded font-mono text-[9px] truncate">
-                                                    {msg.iv || "N/A"}
+                                                    {msg.iv || 'N/A'}
                                                 </div>
                                             </div>
                                             <div className="space-y-1">
-                                                <p className="text-[9px] font-black uppercase tracking-tighter opacity-60">Method</p>
+                                                <p className="text-[9px] font-black uppercase tracking-tighter opacity-60">RSA-OAEP Wrapped Key</p>
                                                 <div className="p-1.5 bg-black/20 rounded font-mono text-[9px] truncate">
-                                                    AES-256-CBC
+                                                    {typeof encryptedKeyValue === 'string' ? encryptedKeyValue : 'N/A'}
                                                 </div>
                                             </div>
                                         </div>
+
                                         <div className="space-y-1">
                                             <p className="text-[9px] font-black uppercase tracking-tighter opacity-60">Integrity Hash (SHA-256)</p>
                                             <div className="p-1.5 bg-black/20 rounded font-mono text-[9px] break-all leading-tight">
-                                                {msg.hash || "N/A"}
+                                                {msg.hash || 'N/A'}
                                             </div>
                                         </div>
+
+                                        <div className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 ${integrityVerified ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                                            <div className="flex items-center gap-2">
+                                                <CheckCircle2 className={`w-4 h-4 ${integrityVerified ? 'text-emerald-400' : 'text-red-400'}`} />
+                                                <div>
+                                                    <p className="text-[9px] font-black uppercase tracking-tighter opacity-60">Integrity Verification</p>
+                                                    <p className={`text-[10px] font-bold ${integrityVerified ? 'text-emerald-300' : 'text-red-300'}`}>
+                                                        {integrityVerified ? 'Integrity Verified (SHA-256)' : 'Integrity Check Failed'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <span className={`text-[10px] font-black uppercase tracking-widest ${integrityVerified ? 'text-emerald-300' : 'text-red-300'}`}>
+                                                {integrityVerified ? '✔' : '✖'}
+                                            </span>
+                                        </div>
+
                                         {msg.latency && (
                                             <div className="flex justify-between items-center px-1">
                                                 <p className="text-[9px] font-black uppercase tracking-tighter opacity-60">Crypto Speed</p>
@@ -473,6 +530,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                             className={`absolute top-1 z-20 p-1.5 rounded-lg bg-white/80 backdrop-blur-sm border border-slate-100 shadow-sm transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 hover:bg-white text-slate-400 hover:text-primary-600 ${
                                 isOwn ? 'right-2' : 'left-0 ml-[calc(100%-32px)]'
                             }`}
+                            title="Message options"
                         >
                             <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showActionMenu ? 'rotate-180' : ''}`} />
                         </button>

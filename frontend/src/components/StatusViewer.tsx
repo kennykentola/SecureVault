@@ -274,7 +274,7 @@ export const StatusViewer: React.FC<StatusViewerProps> = ({
                                 <Trash2 className="w-5 h-5" />
                             </button>
                         )}
-                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full text-white transition-colors">
+                        <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full text-white transition-colors" aria-label="Close viewer">
                             <X className="w-6 h-6" />
                         </button>
                     </div>
@@ -294,8 +294,8 @@ export const StatusViewer: React.FC<StatusViewerProps> = ({
                         <div className="w-full h-full flex items-center justify-center">
                             {currentStatus.type === 'text' ? (
                                 <div 
-                                    className="w-full h-full flex items-center justify-center p-12 text-center"
-                                    style={{ backgroundColor: currentStatus.background_color || '#3b82f6' }}
+                                    className="status-view-bg"
+                                    data-bg-color={currentStatus.background_color || '#3b82f6'}
                                 >
                                     <h2 className="text-3xl font-black text-white leading-tight italic">
                                         {decryptedContent.text || 'Protocol Decoding...'}

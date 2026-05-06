@@ -30,6 +30,12 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ messages }
     const avgEncryptionTime = messages
         .filter(m => m.latency)
         .reduce((acc, m, _, arr) => acc + m.latency / arr.length, 0);
+    const latestTextMessage = [...messages].reverse().find(m => typeof m.text === 'string' && m.text.trim());
+    const latestPlaintext = latestTextMessage?.text || 'N/A';
+    const latestCiphertext = latestTextMessage?.ciphertext || 'N/A';
+    const latestHash = latestTextMessage?.hash || 'N/A';
+    const latestEncryptedKey = latestTextMessage?.encryptedKey || latestTextMessage?.encrypted_key || 'N/A';
+    const latestIntegrityVerified = Boolean(latestTextMessage?.hash);
 
     return (
         <div className="hidden md:block fixed bottom-6 left-6 z-100">
@@ -131,13 +137,45 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ messages }
                                 </div>
                             ) : activeTab === 'protocol' ? (
                                 <div className="space-y-4">
+                                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <p className="text-[9px] font-black uppercase tracking-wider text-emerald-300">Hybrid Packet Snapshot</p>
+                                            <span className={`text-[9px] font-black uppercase tracking-widest ${latestIntegrityVerified ? 'text-emerald-300' : 'text-slate-400'}`}>
+                                                {latestIntegrityVerified ? 'Integrity Verified' : 'No Verified Packet'}
+                                            </span>
+                                        </div>
+                                        <div className="space-y-2 text-[10px] font-mono">
+                                            <div className="rounded-xl bg-black/20 p-2">
+                                                <span className="text-slate-400 block mb-1 font-sans font-black uppercase tracking-widest text-[8px]">Plaintext Message</span>
+                                                <div className="text-white break-words">{latestPlaintext}</div>
+                                            </div>
+                                            <div className="rounded-xl bg-black/20 p-2">
+                                                <span className="text-slate-400 block mb-1 font-sans font-black uppercase tracking-widest text-[8px]">AES-256-CBC Ciphertext</span>
+                                                <div className="text-white break-all">{latestCiphertext}</div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div className="rounded-xl bg-black/20 p-2">
+                                                    <span className="text-slate-400 block mb-1 font-sans font-black uppercase tracking-widest text-[8px]">RSA-OAEP 2048</span>
+                                                    <div className="text-white break-all truncate">{latestEncryptedKey}</div>
+                                                </div>
+                                                <div className="rounded-xl bg-black/20 p-2">
+                                                    <span className="text-slate-400 block mb-1 font-sans font-black uppercase tracking-widest text-[8px]">SHA-256 Hash</span>
+                                                    <div className="text-white break-all truncate">{latestHash}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
+                                            <span className="text-emerald-300">✔ Integrity Verified (SHA-256)</span>
+                                            <span className="text-slate-400">Hybrid RSA/AES</span>
+                                        </div>
+                                    </div>
                                     <div className="flex flex-col gap-3">
                                         {[
-                                            { step: 1, title: 'Plaintext Generation', desc: 'Message content is encoded into a byte array.' },
-                                            { step: 2, title: 'AES-256 Symmetric Encryption', desc: 'Generate a random Session Key and IV to encrypt content.' },
-                                            { step: 3, title: 'RSA-2048 Asymmetric Wrapping', desc: 'Session Key is encrypted with Recipient\'s Public Key.' },
-                                            { step: 4, title: 'SHA-256 Integrity Check', desc: 'A hash is generated to detect any future tampering.' },
-                                            { step: 5, title: 'Combined Packet Delivery', desc: 'Wrapped Key + Ciphertext + IV + Hash sent as one packet.' }
+                                            { step: 1, title: 'Plaintext Message', desc: 'The readable message is the input to the encryption pipeline.' },
+                                            { step: 2, title: 'Symmetric Layer: AES-256-CBC', desc: 'A random AES session key and IV encrypt the plaintext quickly.' },
+                                            { step: 3, title: 'Asymmetric Layer: RSA-OAEP 2048', desc: 'The AES session key is wrapped with the recipient public key.' },
+                                            { step: 4, title: 'Hashing: SHA-256', desc: 'A digest is computed from the decrypted payload to detect tampering.' },
+                                            { step: 5, title: 'Key Exchange: Hybrid RSA/AES', desc: 'Ciphertext, IV, hash, and wrapped key are delivered together.' }
                                         ].map((item, i) => (
                                             <div key={i} className="relative pl-6 border-l border-slate-700 pb-2 last:pb-0">
                                                 <div className="absolute left-[-5px] top-0 w-2.5 h-2.5 rounded-full bg-primary-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />

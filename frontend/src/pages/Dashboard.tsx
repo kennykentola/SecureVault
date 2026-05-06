@@ -1064,7 +1064,7 @@ export const Dashboard: React.FC = () => {
             return (
                 <span className="flex items-center gap-2 text-red-400 font-black italic">
                     <ShieldAlert className="w-4 h-4 animate-pulse" />
-                    {content.map((segment, idx) => {
+                    {content.map((segment, _idx) => {
                         if (typeof segment !== 'string') return segment;
                         return segment.replace(/\[CALL_|\]/g, '').replace(/_/g, ' ');
                     })}
@@ -1073,15 +1073,15 @@ export const Dashboard: React.FC = () => {
         }
 
         // 2. Highlight mentions & links
-        return content.map((segment, idx) => {
+        return content.map((segment, _idx) => {
             if (typeof segment !== 'string') return segment;
             const parts = segment.split(/(@\w+|https?:\/\/[^\s]+)/g);
             return parts.map((part, i) => {
                 if (part.startsWith('@')) {
-                    return <span key={`${idx}-${i}`} className="text-blue-200 font-bold bg-blue-500/20 px-1 rounded cursor-pointer hover:bg-blue-500/40 transition-colors">{part}</span>;
+                    return <span key={`${_idx}-${i}`} className="text-blue-200 font-bold bg-blue-500/20 px-1 rounded cursor-pointer hover:bg-blue-500/40 transition-colors">{part}</span>;
                 }
                 if (part.startsWith('http')) {
-                    return <a key={`${idx}-${i}`} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-300 underline hover:text-blue-100 transition-colors">{part}</a>;
+                    return <a key={`${_idx}-${i}`} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-300 underline hover:text-blue-100 transition-colors">{part}</a>;
                 }
                 return part;
             });
@@ -1781,7 +1781,7 @@ export const Dashboard: React.FC = () => {
         }
     };
 
-    const logCall = async (targetId: string, type: 'voice' | 'video', direction: 'outgoing' | 'incoming' | 'missed' | 'cancelled') => {
+    async function logCall(targetId: string, type: 'voice' | 'video', direction: 'outgoing' | 'incoming' | 'missed' | 'cancelled') {
         if (!user?.$id) return;
         try {
             const timestamp = new Date().toISOString();
@@ -1811,7 +1811,7 @@ export const Dashboard: React.FC = () => {
         } catch (e) {
             console.error("Failed to log call", e);
         }
-    };
+    }
 
     const handleStartCall = (type: 'voice' | 'video') => {
         if (!selectedChat) {

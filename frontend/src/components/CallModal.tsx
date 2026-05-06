@@ -65,8 +65,9 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
     }, [callState.isIncoming, callState.isOutgoing, callState.isActive, playRingingSound, stopRingingSound]);
     const [micMuted, setMicMuted] = React.useState(false);
     const [cameraOff, setCameraOff] = React.useState(false);
-    const [localVideoReady, setLocalVideoReady] = React.useState(false);
+    const [, setLocalVideoReady] = React.useState(false);
     const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
+    const [isSwapped, setIsSwapped] = React.useState(false);
     const pollTimers = React.useRef<Map<HTMLVideoElement, number>>(new Map());
 
     const attachStream = React.useCallback(async (video: HTMLVideoElement | null, stream: MediaStream | null, isLocal: boolean = false) => {
@@ -153,13 +154,13 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
         const video = localVideoRef.current;
         if (!video) return;
         attachStream(video, callState.localStream, true);
-    }, [attachStream, callState.localStream]);
+    }, [attachStream, callState.localStream, isSwapped]);
 
     React.useLayoutEffect(() => {
         const video = remoteVideoRef.current;
         if (!video) return;
         attachStream(video, callState.remoteStream, false);
-    }, [attachStream, callState.remoteStream, callState.isActive]); // Removed remoteVideoReady from dependencies to prevent loops
+    }, [attachStream, callState.remoteStream, callState.isActive, isSwapped]); // Removed remoteVideoReady from dependencies to prevent loops
 
     React.useEffect(() => {
         const audio = remoteAudioRef.current;
@@ -223,7 +224,6 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
     const showRemoteVideo = hasRemoteStream; // Show video container if stream exists
     const isRemoteReady = remoteVideoReady; // Use ready state only for overlay
     const showLocalVideo = hasLocalStream;
-    const isLocalReady = localVideoReady;
 
     const handleSwipeDismiss = (_event: any, info: { offset: { y: number }, velocity: { y: number } }) => {
         const shouldDismiss = info.offset.y > 120 || info.velocity.y > 900;
@@ -439,14 +439,20 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                         </div>
                                     </div>
                                     <div className="flex-1 relative rounded-[2.5rem] overflow-hidden border border-white/10 bg-slate-950 shadow-2xl">
-                                        <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.1),transparent_50%)] ${showRemoteVideo ? 'opacity-0' : 'opacity-100'}`} />
+                                        {/* Primary View (Background) */}
+                                        <div className={`absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.1),transparent_50%)] ${(!isSwapped ? showRemoteVideo : (showLocalVideo && !cameraOff)) ? 'opacity-0' : 'opacity-100'}`} />
+                                        
+                                        {/* Main Background Video */}
                                         <video
-                                            ref={remoteVideoRef}
+                                            ref={!isSwapped ? remoteVideoRef : localVideoRef}
                                             autoPlay
                                             playsInline
-                                            className={`absolute inset-0 w-full h-full object-cover transition-all duration-700 ${showRemoteVideo ? 'opacity-100 scale-100 blur-0' : 'opacity-0 scale-105 blur-2xl'}`}
+                                            muted={isSwapped}
+                                            className={`absolute inset-0 w-full h-full object-cover transition-all duration-700 ${(!isSwapped ? showRemoteVideo : (showLocalVideo && !cameraOff)) ? 'opacity-100 scale-100 blur-0' : 'opacity-0 scale-105 blur-2xl'} ${isSwapped ? 'scale-x-[-1]' : ''}`}
                                         />
-                                        {!isRemoteReady && showRemoteVideo && (
+
+                                        {/* Fallback Overlay for Main View */}
+                                        {((!isSwapped && !isRemoteReady && showRemoteVideo) || (isSwapped && cameraOff)) && (
                                             <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center z-10">
                                                 <div className="relative mb-8">
                                                     <RingPulse />
@@ -473,28 +479,42 @@ export const CallModal: React.FC<CallModalProps> = ({ callState, onAnswer, onEnd
                                                 )}
                                             </div>
                                         )}
-                                        {hasLocalStream && (
+                                        {/* Picture-in-Picture (Secondary View) */}
+                                        {(isSwapped ? hasRemoteStream : hasLocalStream) && (
                                             <motion.div 
                                                 drag
                                                 dragConstraints={{ left: -400, right: 0, top: 0, bottom: 400 }}
                                                 dragElastic={0.1}
                                                 whileDrag={{ scale: 1.05, zIndex: 50 }}
-                                                className="absolute top-8 right-8 w-32 sm:w-48 aspect-video bg-black/40 backdrop-blur-xl rounded-2xl overflow-hidden border border-white/20 shadow-2xl cursor-grab active:cursor-grabbing z-40 group"
+                                                onClick={() => setIsSwapped(!isSwapped)}
+                                                className="absolute top-8 right-8 w-32 sm:w-48 aspect-video bg-black/40 backdrop-blur-xl rounded-2xl overflow-hidden border border-white/20 shadow-2xl cursor-pointer z-40 group"
                                             >
                                                 <video
-                                                    ref={localVideoRef}
+                                                    ref={isSwapped ? remoteVideoRef : localVideoRef}
                                                     autoPlay
                                                     playsInline
-                                                    muted
-                                                    className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-300 ${showLocalVideo && !cameraOff ? 'opacity-100' : 'opacity-0'}`}
+                                                    muted={!isSwapped}
+                                                    className={`w-full h-full object-cover transition-opacity duration-300 ${(!isSwapped ? (showLocalVideo && !cameraOff) : showRemoteVideo) ? 'opacity-100' : 'opacity-0'} ${!isSwapped ? 'scale-x-[-1]' : ''}`}
                                                 />
                                                 <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
                                                 <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/40 rounded-md text-[9px] font-black uppercase tracking-widest text-white/80">
-                                                    You
+                                                    {isSwapped ? displayName : 'You'}
                                                 </div>
-                                                {cameraOff && (
+                                                
+                                                {/* Switch View Indicator */}
+                                                <div className="absolute top-2 right-2 p-1.5 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Users className="w-3 h-3 text-white" />
+                                                </div>
+
+                                                {((!isSwapped && cameraOff) || (isSwapped && !isRemoteReady && showRemoteVideo)) && (
                                                     <div className="absolute inset-0 flex items-center justify-center bg-slate-900/80">
-                                                        <VideoOff className="w-6 h-6 text-white/40" />
+                                                        {isSwapped ? (
+                                                             <div className="relative w-8 h-8 rounded-full bg-linear-to-tr from-primary-600 to-emerald-400 flex items-center justify-center animate-pulse">
+                                                                <Video className="w-4 h-4 text-white" />
+                                                             </div>
+                                                        ) : (
+                                                            <VideoOff className="w-6 h-6 text-white/40" />
+                                                        )}
                                                     </div>
                                                 )}
                                             </motion.div>
