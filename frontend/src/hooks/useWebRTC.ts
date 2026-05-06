@@ -197,19 +197,25 @@ export const useWebRTC = (
 
         pc.oniceconnectionstatechange = () => {
             const state = pc.iceConnectionState;
-            console.log('ICE connection state:', state);
-            if (state === 'failed' || state === 'disconnected' || state === 'closed') {
-                // Give 'disconnected' a grace period — ICE can recover
-                if (state === 'disconnected') {
-                    setTimeout(() => {
-                        if (pc.iceConnectionState === 'disconnected') {
-                            console.warn('ICE stayed disconnected — ending call.');
-                            endCall();
-                        }
-                    }, 5000);
-                } else if (state === 'failed' || state === 'closed') {
-                    endCall();
-                }
+            console.log(`[WebRTC] ICE Connection State: ${state}`);
+            if (state === 'failed' || state === 'closed') {
+                endCall();
+            } else if (state === 'disconnected') {
+                // Grace period for recovery
+                const timeout = setTimeout(() => {
+                    if (pc.iceConnectionState === 'disconnected') {
+                        console.warn('[WebRTC] ICE stayed disconnected. Ending call.');
+                        endCall();
+                    }
+                }, 8000);
+                return () => clearTimeout(timeout);
+            }
+        };
+
+        pc.onconnectionstatechange = () => {
+            console.log(`[WebRTC] Peer Connection State: ${pc.connectionState}`);
+            if (pc.connectionState === 'failed') {
+                endCall();
             }
         };
 
@@ -223,14 +229,23 @@ export const useWebRTC = (
         };
 
         try {
-            return await navigator.mediaDevices.getUserMedia(constraints);
+            console.log(`[WebRTC] Requesting media stream: audio=true, video=${type === 'video'}`);
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            console.log(`[WebRTC] Media stream acquired. Tracks: ${stream.getTracks().length}`);
+            stream.getTracks().forEach(t => {
+                console.log(`[WebRTC] Local track: ${t.kind} - ${t.label} (Enabled: ${t.enabled})`);
+                t.enabled = true; // Ensure explicitly enabled
+            });
+            return stream;
         } catch (error) {
             if (type === 'video') {
-                console.warn('Front camera failed, falling back to default video device.', error);
-                return await navigator.mediaDevices.getUserMedia({
+                console.warn('[WebRTC] Front camera failed, falling back to default video device.', error);
+                const stream = await navigator.mediaDevices.getUserMedia({
                     audio: true,
                     video: true,
                 });
+                console.log(`[WebRTC] Fallback stream acquired. Tracks: ${stream.getTracks().length}`);
+                return stream;
             }
             throw error;
         }
@@ -430,14 +445,16 @@ export const useWebRTC = (
 
             if (!pc || !pc.remoteDescription) {
                 // Buffer candidates that arrive before remote description is set
+                console.log("[WebRTC] Buffering ICE candidate (Remote description not ready)");
                 pendingCandidatesRef.current.push(candidate);
                 return;
             }
 
             try {
                 await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                console.log("[WebRTC] ICE candidate added successfully");
             } catch (e) {
-                console.warn('Failed to add ICE candidate:', e);
+                console.warn('[WebRTC] Failed to add ICE candidate:', e);
             }
 
         } else if (type === 'call_end') {
