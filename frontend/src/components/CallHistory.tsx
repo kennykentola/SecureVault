@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Phone, Video, ArrowUpRight, ArrowDownLeft, Loader2, Search } from 'lucide-react';
+import { Phone, Video, ArrowUpRight, ArrowDownLeft, Loader2, Search, ShieldAlert } from 'lucide-react';
 import { databases, APPWRITE_CONFIG } from '../lib/appwrite';
 import { Query } from 'appwrite';
 
@@ -119,6 +119,7 @@ export const CallHistory: React.FC<CallHistoryProps> = ({ user, onStartCall }) =
                     filteredCalls.map((call) => {
                         const isOutgoing = call.sender_id === user.$id;
                         const payload = getCallPayload(call);
+                        const isMissed = payload.direction === 'missed';
                         const callType = payload.callType || payload.type || call.callType || call.text || 'voice';
                         const isVideo = callType === 'video';
                         const time = new Date(call.timestamp || call.$createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -132,13 +133,15 @@ export const CallHistory: React.FC<CallHistoryProps> = ({ user, onStartCall }) =
                                 <div className="flex-1 text-left">
                                     <h5 className="text-sm font-black text-slate-800">{call.participant.username || call.participant.name || 'Unknown'}</h5>
                                     <div className="flex items-center gap-2 mt-1">
-                                        {isOutgoing ? (
+                                        {isMissed ? (
+                                            <ShieldAlert className="w-3 h-3 text-red-500" />
+                                        ) : isOutgoing ? (
                                             <ArrowUpRight className="w-3 h-3 text-blue-500" />
                                         ) : (
                                             <ArrowDownLeft className="w-3 h-3 text-green-500" />
                                         )}
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                                            {isOutgoing ? 'Outgoing' : 'Incoming'} • {date}, {time}
+                                        <p className={`text-[10px] font-bold uppercase tracking-widest ${isMissed ? 'text-red-500' : 'text-slate-400'}`}>
+                                            {isMissed ? 'Missed' : isOutgoing ? 'Outgoing' : 'Incoming'} • {date}, {time}
                                         </p>
                                     </div>
                                 </div>

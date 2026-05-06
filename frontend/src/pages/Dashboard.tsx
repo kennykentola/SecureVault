@@ -295,7 +295,7 @@ export const Dashboard: React.FC = () => {
         }
     });
 
-    const { callState, startCall, answerCall, endCall, handleSignalingMessage } = useWebRTC(user?.$id, resolveCallDisplayName, sendMessage, wsStatus);
+    const { callState, startCall, answerCall, endCall, handleSignalingMessage } = useWebRTC(user?.$id, resolveCallDisplayName, sendMessage, wsStatus, logCall);
 
     useEffect(() => {
         handleSignalingRef.current = handleSignalingMessage;
@@ -1060,6 +1060,18 @@ export const Dashboard: React.FC = () => {
             );
         }
 
+        if (text.includes("MISSED")) {
+            return (
+                <span className="flex items-center gap-2 text-red-400 font-black italic">
+                    <ShieldAlert className="w-4 h-4 animate-pulse" />
+                    {content.map((segment, idx) => {
+                        if (typeof segment !== 'string') return segment;
+                        return segment.replace(/\[CALL_|\]/g, '').replace(/_/g, ' ');
+                    })}
+                </span>
+            );
+        }
+
         // 2. Highlight mentions & links
         return content.map((segment, idx) => {
             if (typeof segment !== 'string') return segment;
@@ -1769,7 +1781,7 @@ export const Dashboard: React.FC = () => {
         }
     };
 
-    const logCall = async (targetId: string, type: 'voice' | 'video', direction: 'outgoing' | 'incoming') => {
+    const logCall = async (targetId: string, type: 'voice' | 'video', direction: 'outgoing' | 'incoming' | 'missed' | 'cancelled') => {
         if (!user?.$id) return;
         try {
             const timestamp = new Date().toISOString();
@@ -1781,6 +1793,7 @@ export const Dashboard: React.FC = () => {
                     sender_id: direction === 'outgoing' ? user.$id : targetId,
                     receiver_id: direction === 'outgoing' ? targetId : user.$id,
                     type: 'call',
+                    text: `CALL_LOG_${type}_${direction}`.toUpperCase(),
                     ciphertext: `[CALL_${type.toUpperCase()}_${direction.toUpperCase()}]`,
                     encrypted_key: `CALL_LOG_${type}_${direction}`,
                     iv: `CALL_LOG_IV_${type}_${direction}`,

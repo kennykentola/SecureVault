@@ -62,6 +62,7 @@ export const useWebRTC = (
     resolveDisplayName?: (userId: string | null | undefined) => string | null | undefined,
     sendWsMessage?: SignalSender,
     wsStatus?: string,
+    onLogCall?: (targetId: string, type: 'voice' | 'video', direction: 'outgoing' | 'incoming' | 'missed' | 'cancelled') => void
 ) => {
     const [callState, setCallState] = useState<CallState>(INITIAL_CALL_STATE);
 
@@ -69,9 +70,15 @@ export const useWebRTC = (
     const callStateRef = useRef<CallState>(INITIAL_CALL_STATE);
     const resolveDisplayNameRef = useRef(resolveDisplayName);
     const sendWsRef = useRef(sendWsMessage);
+    const onLogCallRef = useRef(onLogCall);
     const pendingCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
     const localStreamRef = useRef<MediaStream | null>(null);
     const signalQueueRef = useRef<any[]>([]);
+    const callTimeoutRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        onLogCallRef.current = onLogCall;
+    }, [onLogCall]);
 
     useEffect(() => {
         callStateRef.current = callState;
@@ -133,9 +140,23 @@ export const useWebRTC = (
     const endCall = useCallback(() => {
         const state = callStateRef.current;
 
+        if (callTimeoutRef.current) {
+            clearTimeout(callTimeoutRef.current);
+            callTimeoutRef.current = null;
+        }
+
         // Notify the other party
         if (state.caller && sendWsRef.current) {
             sendSignal('call_end', state.caller, { reason: 'hangup' });
+        }
+
+        // Log the call if it was outgoing but never answered (Cancelled/Missed)
+        if (state.isOutgoing && !state.isActive && state.caller) {
+            onLogCallRef.current?.(state.caller, state.callType, 'cancelled');
+        }
+        // If receiver declines an incoming call
+        if (state.isIncoming && !state.isActive && state.caller) {
+            onLogCallRef.current?.(state.caller, state.callType, 'incoming');
         }
 
         cleanupPeerConnection();
@@ -298,6 +319,16 @@ export const useWebRTC = (
                 callType: type,
             }));
 
+            // Auto-timeout after 60 seconds of ringing
+            callTimeoutRef.current = window.setTimeout(() => {
+                const currentState = callStateRef.current;
+                if (currentState.isOutgoing && !currentState.isActive) {
+                    console.log("[WebRTC] Call timed out - No answer.");
+                    onLogCallRef.current?.(remoteId, type, 'missed');
+                    endCall();
+                }
+            }, 60000);
+
             sendSignal('offer', remoteId, {
                 sdp: pc.localDescription?.toJSON(),
                 video: type === 'video',
@@ -317,6 +348,11 @@ export const useWebRTC = (
         if (!state.isIncoming || !state.caller) return;
 
         try {
+            if (callTimeoutRef.current) {
+                clearTimeout(callTimeoutRef.current);
+                callTimeoutRef.current = null;
+            }
+
             const stream = await getMediaStream(state.callType);
             stream.getTracks().forEach(t => {
                 t.enabled = true;
@@ -361,6 +397,9 @@ export const useWebRTC = (
                 isActive: true,
                 localStream: stream,
             }));
+
+            // Receiver logs an incoming call once answered
+            onLogCallRef.current?.(state.caller, state.callType, 'incoming');
 
         } catch (err: any) {
             console.error('Failed to answer call', err);
@@ -410,12 +449,28 @@ export const useWebRTC = (
                 callType,
             }));
 
+            // Receiver-side safety timeout: If no action after 65s, auto-end
+            callTimeoutRef.current = window.setTimeout(() => {
+                const currentState = callStateRef.current;
+                if (currentState.isIncoming && !currentState.isActive) {
+                    console.log("[WebRTC] Incoming call timed out.");
+                    onLogCallRef.current?.(senderId, callType, 'missed');
+                    endCall();
+                }
+            }, 65000);
+
         } else if (type === 'answer') {
             const pc = pcRef.current;
             if (!pc) return;
 
             try {
                 await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+                
+                if (callTimeoutRef.current) {
+                    clearTimeout(callTimeoutRef.current);
+                    callTimeoutRef.current = null;
+                }
+
                 // Mark call as active once the answer is accepted on the caller's side
                 setCallState(prev => ({ 
                     ...prev, 
@@ -423,6 +478,11 @@ export const useWebRTC = (
                     isOutgoing: false, 
                     isIncoming: false 
                 }));
+
+                // Caller logs an outgoing call once answered
+                if (payload.sender_id || senderId) {
+                    onLogCallRef.current?.(payload.sender_id || senderId, payload.call_type || 'video', 'outgoing');
+                }
             } catch (e) {
                 console.error('Failed to set remote answer:', e);
             }
@@ -458,6 +518,13 @@ export const useWebRTC = (
             }
 
         } else if (type === 'call_end') {
+            const state = callStateRef.current;
+            
+            // If we were receiving an incoming call and they ended it before we answered
+            if (state.isIncoming && !state.isActive && state.caller) {
+                onLogCallRef.current?.(state.caller, state.callType, 'missed');
+            }
+
             // Remote party ended or rejected the call
             cleanupPeerConnection();
             setCallState(prev => {
