@@ -38,7 +38,7 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ messages }
     const latestIntegrityVerified = Boolean(latestTextMessage?.hash);
 
     return (
-        <div className="hidden md:block fixed bottom-6 left-6 z-100">
+        <div className="fixed bottom-28 md:bottom-6 left-6 z-[100]">
             <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -56,7 +56,7 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ messages }
                         initial={{ opacity: 0, scale: 0.9, y: 20, x: -20 }}
                         animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: 20, x: -20 }}
-                        className="absolute bottom-20 left-0 w-80 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden backdrop-blur-xl"
+                        className="absolute bottom-20 left-0 w-[calc(100vw-3rem)] md:w-80 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden backdrop-blur-xl"
                     >
                         <div className="p-4 border-b border-slate-800 bg-slate-800/50 flex justify-between items-center">
                             <div className="flex items-center gap-2">
