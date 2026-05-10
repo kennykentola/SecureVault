@@ -26,6 +26,8 @@ export const SidebarChatItem: React.FC<SidebarChatItemProps> = ({
     return (
         <button
             onClick={onClick}
+            aria-label={`Chat with ${name}`}
+            title={`Chat with ${name}`}
             className={`w-full flex items-center gap-4 p-4 rounded-3xl transition-all relative group ${isSelected ? 'bg-blue-600 shadow-xl shadow-blue-600/20' : 'hover:bg-slate-50'}`}
         >
             {/* Avatar Section */}

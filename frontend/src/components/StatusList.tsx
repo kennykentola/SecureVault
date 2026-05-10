@@ -188,6 +188,8 @@ export const StatusList: React.FC<StatusListProps> = ({ user, onAdd, onView, ref
                                 key={idx}
                                 onClick={() => onView(group, 0)}
                                 className="w-full bg-white border border-slate-100 p-4 rounded-3xl flex items-center gap-4 hover:shadow-md hover:border-blue-200 transition-all active:scale-[0.98]"
+                                aria-label={`View status from ${group[0].userName}`}
+                                title={`View status from ${group[0].userName}`}
                             >
                                 <div className="p-1 rounded-[1.2rem] border-2 border-blue-500">
                                     <div className="w-12 h-12 bg-slate-100 rounded-[0.9rem] flex items-center justify-center text-blue-600 overflow-hidden font-bold">
@@ -256,6 +258,8 @@ export const StatusList: React.FC<StatusListProps> = ({ user, onAdd, onView, ref
                                         onClick={() => handleDeleteStatus(s.$id, s.content_url)}
                                         disabled={isDeleting === s.$id}
                                         className="p-3 text-red-400 hover:bg-red-50 rounded-2xl transition-all disabled:opacity-50"
+                                        aria-label="Delete status"
+                                        title="Delete status"
                                     >
                                         {isDeleting === s.$id ? (
                                             <Loader2 className="w-5 h-5 animate-spin" />

@@ -8,7 +8,7 @@ import { Query, ID, Permission, Role } from 'appwrite';
 import {
     Send, Lock as LockIcon, ShieldCheck, LogOut, Search,
     ShieldAlert,
-    Settings, MessageCircle, Phone, Video, MoreVertical, Activity, Terminal, Eye,
+    Settings, MessageCircle, Phone, Video, MoreVertical,
     Paperclip, Smile, Mic, Menu, Users as UsersIcon, X, Globe, Plus, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -75,7 +75,7 @@ export const Dashboard: React.FC = () => {
     const [isKeyMismatch, setIsKeyMismatch] = useState(false);
     const [isRepairing, setIsRepairing] = useState(false);
     const [identityRepairReason, setIdentityRepairReason] = useState<'cloud_mismatch' | 'old_identity_message' | null>(null);
-    const [showMonitor, setShowMonitor] = useState(true);
+    
     const [mutedChatIds, setMutedChatIds] = useState<Record<string, boolean>>(() => {
         if (typeof window === 'undefined') {
             return {};
@@ -1834,7 +1834,7 @@ export const Dashboard: React.FC = () => {
     };
 
     return (
-        <div className="h-screen flex bg-vault text-slate-100 overflow-hidden font-sans selection:bg-primary-500/30">
+        <div className="h-[100dvh] flex bg-vault text-slate-100 overflow-hidden font-sans selection:bg-primary-500/30">
             <div className="vault-overlay" />
             <CallModal callState={callState} onAnswer={answerCall} onEnd={endCall} />
             <ProfileSettings isOpen={showProfile} onClose={() => setShowProfile(false)} />
@@ -1862,9 +1862,23 @@ export const Dashboard: React.FC = () => {
                             </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                            <button onClick={() => setIsMobileSidebarOpen(false)} className="md:hidden p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg shadow-black/20"><X className="w-5 h-5" /></button>
+                            <button 
+                                onClick={() => setIsMobileSidebarOpen(false)} 
+                                className="md:hidden p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg shadow-black/20"
+                                aria-label="Close sidebar"
+                                title="Close sidebar"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
                             <div className="relative">
-                                <button onClick={() => setShowTopMenu(!showTopMenu)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 hover:text-slate-900"><MoreVertical className="w-5 h-5" /></button>
+                                <button 
+                                    onClick={() => setShowTopMenu(!showTopMenu)} 
+                                    className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 hover:text-slate-900"
+                                    aria-label="Menu"
+                                    title="Menu"
+                                >
+                                    <MoreVertical className="w-5 h-5" />
+                                </button>
                                 {showTopMenu && (
                                     <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-2 z-50">
                                         <button onClick={() => { setShowCreateGroup(true); setShowTopMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-800 hover:bg-slate-50 transition-colors flex items-center gap-3">
@@ -1916,6 +1930,8 @@ export const Dashboard: React.FC = () => {
                             <button 
                                 onClick={() => { setIsKeyMismatch(false); setIdentityRepairReason(null); }}
                                 className="absolute top-2 right-2 p-1 hover:bg-white/10 rounded-lg text-slate-500 transition-colors"
+                                aria-label="Dismiss banner"
+                                title="Dismiss banner"
                             >
                                 <X className="w-4 h-4" />
                             </button>
@@ -2060,13 +2076,23 @@ export const Dashboard: React.FC = () => {
                 {selectedChat ? (
                     <>
                         {/* Chat Header */}
-                        <header className="h-20 glass-header flex items-center justify-between px-4 md:px-8 z-10">
+                        <header className="h-16 md:h-20 glass-header flex items-center justify-between px-4 md:px-8 z-10">
                             <div className="flex items-center gap-4">
-                                <button onClick={() => setIsMobileSidebarOpen(true)} className="md:hidden p-2 hover:bg-slate-200 rounded-lg transition-colors">
+                                <button 
+                                    onClick={() => setIsMobileSidebarOpen(true)} 
+                                    className="md:hidden p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                                    aria-label="Open sidebar"
+                                    title="Open sidebar"
+                                >
                                     <Menu className="w-5 h-5 text-slate-600" />
                                 </button>
                                 {!privateKey && (
-                                    <button onClick={() => setShowUnlockModal(true)} className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-600">
+                                    <button 
+                                        onClick={() => setShowUnlockModal(true)} 
+                                        className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-600"
+                                        aria-label="Unlock vault"
+                                        title="Unlock vault"
+                                    >
                                         <LockIcon className="w-5 h-5" />
                                     </button>
                                 )}
@@ -2113,14 +2139,15 @@ export const Dashboard: React.FC = () => {
                                         onChange={(e) => setChatSearchQuery(e.target.value)}
                                     />
                                 </div>
+
                                 <button 
-                                    onClick={() => setShowMonitor(!showMonitor)}
-                                    className={`p-2.5 md:p-3 rounded-2xl transition-all ${showMonitor ? 'text-primary-600 bg-primary-50' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'}`}
-                                    title="Toggle Security Monitor"
+                                    onClick={() => setShowSearch(!showSearch)} 
+                                    className={`p-2.5 md:p-3 rounded-2xl transition-all ${showSearch ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'}`}
+                                    aria-label="Toggle search"
+                                    title="Toggle search"
                                 >
-                                    <Activity className="w-5 h-5" />
+                                    <Search className="w-5 h-5" />
                                 </button>
-                                <button onClick={() => setShowSearch(!showSearch)} className={`p-2.5 md:p-3 rounded-2xl transition-all ${showSearch ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'}`}><Search className="w-5 h-5" /></button>
                                 {showSearch && (
                                     <div className="flex gap-2 mr-2">
                                         <button 
@@ -2138,22 +2165,50 @@ export const Dashboard: React.FC = () => {
                                     </div>
                                 )}
                                 {selectedChat.type === 'group' && (
-                                    <button onClick={() => setShowAddMember(true)} className="p-2.5 md:p-3 bg-indigo-50 hover:bg-indigo-100 rounded-2xl transition-all text-indigo-600"><Plus className="w-5 h-5" /></button>
+                                    <button 
+                                        onClick={() => setShowAddMember(true)} 
+                                        className="p-2.5 md:p-3 bg-indigo-50 hover:bg-indigo-100 rounded-2xl transition-all text-indigo-600"
+                                        aria-label="Add member"
+                                        title="Add member"
+                                    >
+                                        <Plus className="w-5 h-5" />
+                                    </button>
                                 )}
                                 {selectedChat.type !== 'group' && (
                                     <>
-                                        <button onClick={() => handleStartCall('voice')} className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Phone className="w-4 h-4 md:w-5 md:h-5" /></button>
-                                        <button onClick={() => handleStartCall('video')} className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><Video className="w-4 h-4 md:w-5 md:h-5" /></button>
+                                        <button 
+                                            onClick={() => handleStartCall('voice')} 
+                                            className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"
+                                            aria-label="Voice call"
+                                            title="Voice call"
+                                        >
+                                            <Phone className="w-4 h-4 md:w-5 md:h-5" />
+                                        </button>
+                                        <button 
+                                            onClick={() => handleStartCall('video')} 
+                                            className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"
+                                            aria-label="Video call"
+                                            title="Video call"
+                                        >
+                                            <Video className="w-4 h-4 md:w-5 md:h-5" />
+                                        </button>
                                     </>
                                 )}
-                                <button onClick={() => selectedChat.type === 'group' ? setShowGroupDetail(true) : setShowProfilePanel(true)} className="p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"><MoreVertical className="w-4 h-4 md:w-5 md:h-5" /></button>
+                                <button 
+                                    onClick={() => selectedChat.type === 'group' ? setShowGroupDetail(true) : setShowProfilePanel(true)} 
+                                    className="p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"
+                                    aria-label="More options"
+                                    title="More options"
+                                >
+                                    <MoreVertical className="w-4 h-4 md:w-5 md:h-5" />
+                                </button>
                             </div>
                         </header>
 
                         {/* Messages */}
                         <div 
                             ref={scrollRef} 
-                            className="flex-1 overflow-y-auto p-8 space-y-6 scroll-hide relative bg-transparent"
+                            className="flex-1 overflow-y-auto p-4 md:p-8 pt-6 md:pt-8 space-y-4 md:space-y-6 scroll-hide relative bg-transparent"
                         >
                             {messages.filter(m => {
                                 const searchText = (m.text as string || "").toLowerCase();
@@ -2185,7 +2240,7 @@ export const Dashboard: React.FC = () => {
                         </div>
 
                         {/* Input Area */}
-                        <footer className="p-8 glass-footer relative z-20">
+                        <footer className="p-4 md:p-8 glass-footer relative z-20">
                             <div className="max-w-5xl mx-auto relative">
                                 <AnimatePresence>
                                     {editingMessage && (
@@ -2200,7 +2255,12 @@ export const Dashboard: React.FC = () => {
                                                     <p className="text-[10px] font-black text-blue-400 mb-1 uppercase tracking-widest">Editing Message</p>
                                                     <p className="text-sm text-slate-200 truncate">{editingMessage.text}</p>
                                                 </div>
-                                                <button onClick={() => { setEditingMessage(null); setNewMessage(""); }} className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg">
+                                                <button 
+                                                    onClick={() => { setEditingMessage(null); setNewMessage(""); }} 
+                                                    className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg"
+                                                    aria-label="Cancel editing"
+                                                    title="Cancel editing"
+                                                >
                                                     <X className="w-4 h-4" />
                                                 </button>
                                             </div>
@@ -2218,7 +2278,12 @@ export const Dashboard: React.FC = () => {
                                                     <p className="text-[10px] font-black text-emerald-400 mb-1 uppercase tracking-widest">Replying to {replyTo.sender_name || selectedChat.username}</p>
                                                     <p className="text-sm text-slate-200 truncate">{replyTo.text || 'Voice/Media'}</p>
                                                 </div>
-                                                <button onClick={() => setReplyTo(null)} className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg">
+                                                <button 
+                                                    onClick={() => setReplyTo(null)} 
+                                                    className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg"
+                                                    aria-label="Cancel reply"
+                                                    title="Cancel reply"
+                                                >
                                                     <X className="w-4 h-4" />
                                                 </button>
                                             </div>
@@ -2242,6 +2307,8 @@ export const Dashboard: React.FC = () => {
                                             type="file" 
                                             ref={fileInputRef} 
                                             className="hidden" 
+                                            aria-label="Upload file"
+                                            title="Upload file"
                                             onChange={(e) => {
                                                 const file = e.target.files?.[0];
                                                 if (file) handleMediaUpload(file, 'file');
@@ -2253,6 +2320,8 @@ export const Dashboard: React.FC = () => {
                                             onClick={() => fileInputRef.current?.click()}
                                             disabled={isVoiceUploading}
                                             className={`p-3 md:p-4 hover:bg-white/10 rounded-full transition-colors text-slate-500 hover:text-white ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            aria-label="Attach file"
+                                            title="Attach file"
                                         >
                                             <Paperclip className="w-5 h-5 md:w-6 md:h-6" />
                                         </button>
@@ -2261,6 +2330,8 @@ export const Dashboard: React.FC = () => {
                                             onClick={() => setShowGiphy(!showGiphy)} 
                                             disabled={isVoiceUploading}
                                             className={`p-3 md:p-4 rounded-full transition-colors ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''} ${showGiphy ? 'bg-primary-600 text-white' : 'hover:bg-white/10 text-slate-500 hover:text-white'}`}
+                                            aria-label="Choose emoji or GIF"
+                                            title="Choose emoji or GIF"
                                         ><Smile className="w-5 h-5 md:w-6 md:h-6" /></button>
                                     </div>
                                     
@@ -2270,6 +2341,8 @@ export const Dashboard: React.FC = () => {
                                             onChange={(e) => setNewMessage(e.target.value)}
                                             onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
                                             placeholder="Type a message"
+                                            aria-label="Type a message"
+                                            title="Type a message"
                                             className="flex-1 min-w-0 bg-transparent border-none py-3 md:py-4 px-1 md:px-2 text-sm md:text-base focus:ring-0 resize-none max-h-40 scrollbar-hide text-slate-800 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
                                         />
                                     
@@ -2297,6 +2370,7 @@ export const Dashboard: React.FC = () => {
                                             type="button"
                                             onClick={toggleRecording}
                                             disabled={isVoiceUploading}
+                                            aria-label={isRecording ? 'Stop and send voice note' : 'Start voice note'}
                                             title={isRecording ? 'Stop & send voice note' : 'Start voice note'}
                                             className={`p-3 md:p-4 rounded-full transition-all ${
                                                 isRecording
@@ -2313,6 +2387,8 @@ export const Dashboard: React.FC = () => {
                                                 type="button"
                                                 onClick={() => handleSendMessage()}
                                                 disabled={isVoiceUploading || (!newMessage.trim() && !newMessage)}
+                                                aria-label="Send message"
+                                                title="Send message"
                                                 className={`p-3 md:p-4 bg-linear-to-br from-primary-600 to-indigo-700 hover:from-primary-500 hover:to-indigo-600 text-white rounded-full transition-all shadow-xl shadow-primary-500/30 active:scale-95 ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                                             >
                                                 {isVoiceUploading ? <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" /> : <Send className="w-5 h-5 md:w-6 md:h-6" />}
@@ -2328,21 +2404,26 @@ export const Dashboard: React.FC = () => {
                         {/* Mobile Header */}
                         <header className="md:hidden h-16 border-b border-slate-200 flex items-center justify-between px-4 bg-white z-10 transition-all">
                             <div className="flex items-center gap-3">
-                                <button onClick={() => setIsMobileSidebarOpen(true)} className="p-2 hover:bg-slate-200 rounded-lg transition-colors">
+                                <button 
+                                    onClick={() => setIsMobileSidebarOpen(true)} 
+                                    className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                                    aria-label="Open sidebar"
+                                    title="Open sidebar"
+                                >
                                     <Menu className="w-5 h-5 text-slate-600" />
                                 </button>
                                 <h1 className="text-lg font-black text-[#FFF9E3] tracking-tighter uppercase">SecureVault</h1>
                             </div>
                             
                             <div className="flex items-center gap-1">
-                                <button 
-                                    onClick={() => setShowMonitor(!showMonitor)}
-                                    className={`p-2 rounded-lg transition-all ${showMonitor ? 'text-primary-600 bg-primary-50' : 'text-slate-600 hover:bg-slate-100'}`}
-                                >
-                                    <Activity className="w-5 h-5" />
-                                </button>
+
                                 <div className="relative">
-                                    <button onClick={() => setShowTopMenu(!showTopMenu)} className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-600">
+                                    <button 
+                                        onClick={() => setShowTopMenu(!showTopMenu)} 
+                                        className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-600"
+                                        aria-label="Menu"
+                                        title="Menu"
+                                    >
                                         <MoreVertical className="w-5 h-5" />
                                     </button>
                                     {showTopMenu && (
@@ -2399,90 +2480,9 @@ export const Dashboard: React.FC = () => {
                 )}
                 </div>
 
-                {/* Security Monitor Split Panel */}
-                <AnimatePresence>
-                    {showMonitor && (
-                        <motion.div 
-                            initial={{ x: '100%', opacity: 0 }}
-                            animate={{ x: 0, opacity: 1 }}
-                            exit={{ x: '100%', opacity: 0 }}
-                            className="fixed md:relative inset-y-0 right-0 w-full md:w-[400px] bg-slate-900 border-l border-slate-800 flex flex-col shrink-0 overflow-hidden z-50 md:z-30 shadow-2xl md:shadow-none"
-                        >
-                            <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900/80 backdrop-blur-md">
-                                <div className="flex items-center gap-3">
-                                    <button 
-                                        onClick={() => setShowMonitor(false)}
-                                        className="md:hidden p-2 -ml-2 hover:bg-white/10 rounded-full transition-colors text-white"
-                                    >
-                                        <X className="w-5 h-5" />
-                                    </button>
-                                    <div className="w-8 h-8 rounded-lg bg-primary-600/20 flex items-center justify-center">
-                                        <Terminal className="w-4 h-4 text-primary-400" />
-                                    </div>
-                                    <h3 className="font-black text-[11px] text-white uppercase tracking-[0.2em]">Security Stream</h3>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                    <div className="w-2 h-2 rounded-full bg-primary-500 animate-pulse" />
-                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Intercepting</span>
-                                </div>
-                            </div>
-                            
-                            <div className="flex-1 overflow-y-auto p-4 space-y-4 font-mono custom-scrollbar">
-                                {messages.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center h-full text-slate-600 text-center px-8">
-                                        <Eye className="w-12 h-12 mb-4 opacity-10" />
-                                        <p className="text-[10px] italic leading-relaxed uppercase tracking-widest opacity-50">Monitoring network traffic for E2EE packets...</p>
-                                    </div>
-                                ) : (
-                                    [...messages].reverse().map((m, i) => (
-                                        <motion.div 
-                                            key={m.$id || i}
-                                            initial={{ x: 50, opacity: 0 }}
-                                            animate={{ x: 0, opacity: 1 }}
-                                            className={`p-4 rounded-2xl border transition-all ${
-                                                m.isTampered ? 'bg-red-500/10 border-red-500/30' : 'bg-slate-800/30 border-slate-700/30'
-                                            }`}
-                                        >
-                                            <div className="flex justify-between items-center mb-3">
-                                                <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded ${m.sender_id === user?.$id ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'}`}>
-                                                    {m.sender_id === user?.$id ? 'Out' : 'In'} Packet #{messages.length - i}
-                                                </span>
-                                                <span className="text-[8px] text-slate-600">{new Date(m.timestamp).toLocaleTimeString()}</span>
-                                            </div>
-                                            
-                                            <div className="space-y-3">
-                                                <div className="space-y-1">
-                                                    <p className="text-[7px] font-black text-slate-600 uppercase tracking-widest">Encrypted Content</p>
-                                                    <p className="text-[10px] text-slate-300 break-all leading-tight bg-black/40 p-2 rounded-lg border border-white/5 font-mono">
-                                                        {m.ciphertext || "[BINARY_STREAM]"}
-                                                    </p>
-                                                </div>
-                                                
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <div>
-                                                        <p className="text-[7px] font-black text-slate-600 uppercase tracking-widest">Auth Tag</p>
-                                                        <p className="text-[9px] text-slate-500 truncate mt-0.5">{m.hash?.substring(0, 12)}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-[7px] font-black text-slate-600 uppercase tracking-widest">Protocol</p>
-                                                        <p className="text-[9px] text-slate-500 truncate mt-0.5">AES+RSA</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </motion.div>
-                                    ))
-                                )}
-                            </div>
-                            
-                            <div className="p-4 bg-slate-950 border-t border-slate-800">
-                                <div className="flex items-center justify-between text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                                    <span>Stream Active</span>
-                                    <span className="text-primary-500">{messages.length} Captured</span>
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                
+                
+
             </main>
             <PinInput 
                 isOpen={showUnlockModal} 
