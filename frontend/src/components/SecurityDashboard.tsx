@@ -232,9 +232,9 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ messages }
                                                 </div>
                                                 <div className="grid grid-cols-[65px_1fr] gap-1 text-slate-400">
                                                     <span className="text-red-500/40 font-bold uppercase text-[7px]">Ciphertext</span> 
-                                                    <span className="text-slate-200 truncate font-mono">{m.ciphertext || "[BINARY_STREAM]"}</span>
+                                                    <span className="text-slate-200 break-all font-mono">{m.ciphertext || "[BINARY_STREAM]"}</span>
                                                     <span className="text-red-500/40 font-bold uppercase text-[7px]">Auth_Tag</span> 
-                                                    <span className="text-red-500/50 truncate font-mono">{m.hash?.substring(0, 16) || "NO_TAG"}</span>
+                                                    <span className="text-red-500/50 break-all font-mono">{m.hash?.substring(0, 16) || "NO_TAG"}</span>
                                                 </div>
                                             </div>
                                         ))
