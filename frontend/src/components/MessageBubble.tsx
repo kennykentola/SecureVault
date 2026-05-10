@@ -467,7 +467,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                                             </div>
                                             <div className="space-y-1">
                                                 <p className="text-[9px] font-black uppercase tracking-tighter opacity-60">RSA-OAEP Wrapped Key</p>
-                                                <div className="p-1.5 bg-black/20 rounded font-mono text-[9px] truncate">
+                                                <div className="p-1.5 bg-black/20 rounded font-mono text-[9px] break-all max-h-16 overflow-y-auto custom-scrollbar">
                                                     {typeof encryptedKeyValue === 'string' ? encryptedKeyValue : 'N/A'}
                                                 </div>
                                             </div>

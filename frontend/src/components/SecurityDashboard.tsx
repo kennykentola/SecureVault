@@ -146,7 +146,7 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ messages }
                                             <div className="space-y-1.5">
                                                 <p className="text-[10px] font-black text-white uppercase tracking-tight">{item.title}</p>
                                                 <div className="p-2 bg-black/40 rounded-xl border border-slate-800/50 group-hover:border-primary-500/30 transition-colors">
-                                                    <p className="text-[10px] font-mono text-slate-300 break-all leading-relaxed line-clamp-4 group-hover:line-clamp-none transition-all cursor-help">{item.value}</p>
+                                                    <p className="text-[10px] font-mono text-slate-300 break-all leading-relaxed max-h-32 overflow-y-auto custom-scrollbar cursor-help">{item.value}</p>
                                                 </div>
                                                 <div className="space-y-1">
                                                     <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{item.desc}</p>
