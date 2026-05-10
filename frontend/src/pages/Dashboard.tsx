@@ -2048,7 +2048,7 @@ export const Dashboard: React.FC = () => {
                 </div>
 
                 {/* Sidebar Footer */}
-                <div className="p-4 md:p-4 pb-12 md:pb-4 border-t border-slate-200 bg-slate-50/50 backdrop-blur-sm shrink-0">
+                <div className="p-4 md:p-4 pb-24 md:pb-4 border-t border-slate-200 bg-slate-50/50 backdrop-blur-sm shrink-0">
                     <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-white border border-slate-200 shadow-sm">
                         <div className="flex items-center gap-3 min-w-0">
                             <div className="w-10 h-10 rounded-xl bg-primary-100 flex items-center justify-center shrink-0">
