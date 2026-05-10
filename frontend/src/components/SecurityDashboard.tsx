@@ -31,7 +31,7 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ messages }
     const latestEncryptedKey = latestTextMessage?.encryptedKey || latestTextMessage?.encrypted_key || 'N/A';
 
     return (
-        <div className="fixed bottom-28 md:bottom-6 right-6 z-[100]">
+        <div className="fixed bottom-44 md:bottom-6 right-6 z-[100]">
             <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
