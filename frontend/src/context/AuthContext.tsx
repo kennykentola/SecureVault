@@ -199,16 +199,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const restorePrimaryVaultFromBackup = async (pin: string) => {
-        const profile = await getMyProfileDocument();
-        if (!profile) return null;
+        try {
+            const profile = await getMyProfileDocument();
+            if (!profile) return null;
 
-        const backupRecord = normalizeBackupRecord(profile.doc.vault_backup);
-        if (!backupRecord) return null;
+            const backupRecord = normalizeBackupRecord(profile.doc.vault_backup);
+            if (!backupRecord) return null;
 
-        const restoredPrivateKey = await KeyManager.restorePrivateKeyFromBackup(backupRecord.backup, pin);
-        const restoredPublicKey = await KeyManager.importPublicKey(backupRecord.public_key);
-        await KeyManager.storePrivateKey(restoredPrivateKey, restoredPublicKey, pin);
-        return restoredPrivateKey;
+            const restoredPrivateKey = await KeyManager.restorePrivateKeyFromBackup(backupRecord.backup, pin);
+            const restoredPublicKey = await KeyManager.importPublicKey(backupRecord.public_key);
+            await KeyManager.storePrivateKey(restoredPrivateKey, restoredPublicKey, pin);
+            return restoredPrivateKey;
+        } catch (e) {
+            console.warn("[Security] Failed to restore primary vault from backup:", e);
+            return null;
+        }
     };
 
     const loadLegacyPrivateKeys = async (pin: string, currentPublicKey: string | null) => {
@@ -339,15 +344,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
         } catch (e: any) {
             console.error("Unlock failed", e);
-            if (e.message.includes("No security keys found")) {
+            const msg = e.message || "Failed to unlock vault.";
+            if (msg.includes("No security keys found")) {
                 alert("No security keys were found on this device.\n\nPossible reasons:\n1. You registered on a different address (like 127.0.0.1 vs localhost).\n2. You are using a different browser.\n3. Your browser data was cleared.\n\nPlease try using the same address you registered with, or re-register if this is a new device.");
+            } else if (msg.includes("Invalid security PIN")) {
+                alert("Incorrect PIN. Please try again.");
             } else {
-                alert(e.message || "Failed to unlock vault. Please check your PIN.");
+                alert(msg);
             }
             throw e;
         }
     };
-    
+
     const resetKeys = async () => {
         if (window.confirm("WARNING: This will permanently delete your encryption keys on this device. You will NOT be able to read old messages. Proceed?")) {
             await KeyManager.resetAllKeys();
@@ -371,7 +379,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Fetch metadata doc
             const { databases, APPWRITE_CONFIG } = await import('../lib/appwrite');
             const { Query } = await import('appwrite');
-            
+
             const res = await databases.listDocuments(
                 APPWRITE_CONFIG.DATABASE_ID,
                 APPWRITE_CONFIG.COLLECTION_USERS,
@@ -410,11 +418,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             sessionStorage.setItem('unlocked_vault', JSON.stringify(jwk));
             await persistLegacyKeysToSession(unlockedLegacyKeys);
             console.log("New vault initialized and synced.");
-            
+
             // Generate and return recovery key for the UI to display
             const recoveryKey = KeyManager.generateRecoveryKey();
             const recoveryBackupRecord = await KeyManager.createRecoveryVaultBackupRecord(keys.privateKey, recoveryKey, publicKeyStr);
-            
+
             try {
                 await databases.updateDocument(
                     APPWRITE_CONFIG.DATABASE_ID,
@@ -425,7 +433,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } catch (updateError: any) {
                 console.warn('[Security] recovery_vault_backup attribute not in schema, skipping recovery backup sync.', updateError);
             }
-            
+
             return recoveryKey;
         } catch (e: any) {
             console.error("Setup failed", e);
@@ -437,21 +445,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const profile = await getMyProfileDocument();
             if (!profile) throw new Error("Could not find user profile.");
-            
+
             const recoveryBackup = normalizeBackupRecord(profile.doc.recovery_vault_backup);
             if (!recoveryBackup) throw new Error("No recovery backup found for this account. Recovery is not possible.");
 
             const restoredPrivateKey = await KeyManager.restorePrivateKeyFromRecoveryBackup(recoveryBackup.backup, recoveryKey);
             const restoredPublicKey = await KeyManager.importPublicKey(recoveryBackup.public_key);
-            
+
             await KeyManager.storePrivateKey(restoredPrivateKey, restoredPublicKey, newPin);
-            
+
             setPrivateKey(restoredPrivateKey);
             const jwk = await window.crypto.subtle.exportKey("jwk", restoredPrivateKey);
             sessionStorage.setItem('unlocked_vault', JSON.stringify(jwk));
-            
+
             await syncCurrentVaultBackup(restoredPrivateKey, newPin, recoveryBackup.public_key);
-            
+
             const unlockedLegacyKeys = await loadLegacyPrivateKeys(newPin, recoveryBackup.public_key);
             setLegacyPrivateKeys(unlockedLegacyKeys);
             await persistLegacyKeysToSession(unlockedLegacyKeys);
