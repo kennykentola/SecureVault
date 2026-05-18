@@ -1,17 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Zap, Globe, Activity, Eye, Lock, Hash, KeyRound, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { Shield, Zap, Globe, Activity, Eye, Lock, Hash, KeyRound, FileText, ChevronDown } from 'lucide-react';
 
 interface SecurityInsightsProps {
     messages: any[];
+}
+
+type ProtocolItem = 'plaintext' | 'aes' | 'rsa' | 'sha' | 'auth';
+type ArchItem = 'symmetric' | 'asymmetric' | 'hashing' | 'hybrid';
+
+interface ItemDetail {
+    title: string;
+    value: string;
+    desc: string;
+    howItWorks: string;
+    liveLabel: string;
+    liveValue: string;
+    liveHint: string;
+    color: string;
+    Icon: React.ElementType;
 }
 
 export const SecurityInsights: React.FC<SecurityInsightsProps> = ({ messages }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'metrics' | 'mitm' | 'protocol'>('metrics');
     const [networkLatency, setNetworkLatency] = useState<number>(0);
-    const [expandedProtocol, setExpandedProtocol] = useState<number | null>(null);
-    const [expandedArch, setExpandedArch] = useState<number | null>(null);
+    const [selectedProtocol, setSelectedProtocol] = useState<ProtocolItem>('aes');
+    const [selectedArch, setSelectedArch] = useState<ArchItem>('symmetric');
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -30,8 +45,128 @@ export const SecurityInsights: React.FC<SecurityInsightsProps> = ({ messages }) 
     const latestEncryptedKey = latestTextMessage?.encryptedKey || latestTextMessage?.encrypted_key || 'N/A';
     const latestIV = latestTextMessage?.iv || 'N/A';
 
-    const toggleProtocol = (i: number) => setExpandedProtocol(expandedProtocol === i ? null : i);
-    const toggleArch = (i: number) => setExpandedArch(expandedArch === i ? null : i);
+    const protocolItems: { key: ProtocolItem; label: string }[] = [
+        { key: 'plaintext', label: 'Plaintext' },
+        { key: 'aes', label: 'AES-256-CBC' },
+        { key: 'rsa', label: 'RSA-OAEP 2048' },
+        { key: 'sha', label: 'SHA-256' },
+        { key: 'auth', label: 'Auth Tag' },
+    ];
+
+    const archItems: { key: ArchItem; label: string }[] = [
+        { key: 'symmetric', label: 'Symmetric Layer' },
+        { key: 'asymmetric', label: 'Asymmetric Layer' },
+        { key: 'hashing', label: 'Hashing Mechanism' },
+        { key: 'hybrid', label: 'Hybrid Handshake' },
+    ];
+
+    const protocolDetails: Record<ProtocolItem, ItemDetail> = {
+        plaintext: {
+            title: 'Plaintext Message',
+            value: latestPlaintext,
+            desc: 'Raw UTF-8 input string before buffer conversion.',
+            howItWorks: 'The unencrypted data is encoded into a byte array, serving as the base for the encryption rounds.',
+            liveLabel: 'Live Plaintext',
+            liveValue: latestPlaintext,
+            liveHint: 'This is the original message before any encryption is applied. It only exists in plain form on the sender\'s device.',
+            color: 'bg-slate-500',
+            Icon: FileText,
+        },
+        aes: {
+            title: 'AES-256-CBC Ciphertext',
+            value: latestCiphertext,
+            desc: 'Advanced Encryption Standard with Cipher Block Chaining.',
+            howItWorks: 'Uses a 256-bit key to encrypt data in 128-bit blocks. Each block is XORed with the previous ciphertext block to eliminate patterns.',
+            liveLabel: 'Live Ciphertext',
+            liveValue: latestCiphertext !== 'N/A' ? String(latestCiphertext) : 'No messages yet',
+            liveHint: 'Each message gets a fresh random IV — no two ciphertexts are ever identical for the same plaintext.',
+            color: 'bg-emerald-500',
+            Icon: Lock,
+        },
+        rsa: {
+            title: 'RSA-OAEP 2048 (Wrapped Key)',
+            value: latestEncryptedKey,
+            desc: 'Asymmetric Key Wrapping for secure transmission.',
+            howItWorks: 'The AES session key is encrypted using the recipient\'s RSA public key. OAEP padding adds unique randomness to every encryption.',
+            liveLabel: 'Live Wrapped Key',
+            liveValue: latestEncryptedKey !== 'N/A' ? String(latestEncryptedKey) : 'No messages yet',
+            liveHint: 'Only the recipient\'s private key can unwrap this. The server stores this blob but cannot read it.',
+            color: 'bg-blue-500',
+            Icon: KeyRound,
+        },
+        sha: {
+            title: 'SHA-256 Integrity Hash',
+            value: latestHash,
+            desc: 'Cryptographic digest for tamper detection.',
+            howItWorks: 'Processes the entire payload through a one-way hashing algorithm. Even a 1-bit change in data results in a completely different 256-bit hash.',
+            liveLabel: 'Live Integrity Hash',
+            liveValue: latestHash !== 'N/A' ? String(latestHash) : 'No messages yet',
+            liveHint: 'If even one bit of the ciphertext changes in transit, this hash will not match on arrival.',
+            color: 'bg-purple-500',
+            Icon: Hash,
+        },
+        auth: {
+            title: 'Auth Tag / Signature',
+            value: `0x${latestHash.substring(0, 32).toUpperCase()}`,
+            desc: 'Message Authentication Code (MAC) for verification.',
+            howItWorks: 'A truncated portion of the hash or a GCM-generated tag used by the receiver to verify both authenticity and integrity instantly.',
+            liveLabel: 'Live Auth Tag',
+            liveValue: latestHash !== 'N/A' ? `0x${latestHash.substring(0, 32).toUpperCase()}` : 'N/A',
+            liveHint: 'The receiver recomputes this tag and compares it. A mismatch means the message was tampered with.',
+            color: 'bg-pink-500',
+            Icon: Shield,
+        },
+    };
+
+    const archDetails: Record<ArchItem, ItemDetail> = {
+        symmetric: {
+            title: 'Symmetric Layer',
+            value: 'AES-256-CBC',
+            desc: 'Handles the bulk encryption of data.',
+            howItWorks: 'Implementation utilizes hardware acceleration (AES-NI) when available. Uses a unique Initialization Vector (IV) for every single message.',
+            liveLabel: 'Live Ciphertext',
+            liveValue: latestCiphertext !== 'N/A' ? String(latestCiphertext) : 'No messages yet',
+            liveHint: 'Each message gets a fresh random IV — no two ciphertexts are ever identical for the same plaintext.',
+            color: 'bg-emerald-500',
+            Icon: Lock,
+        },
+        asymmetric: {
+            title: 'Asymmetric Layer',
+            value: 'RSA-OAEP 2048',
+            desc: 'Solves the "Key Exchange" problem.',
+            howItWorks: 'The core utilizes prime number factorisation security. OAEP padding prevents adaptive chosen ciphertext attacks (CCA2).',
+            liveLabel: 'Live Wrapped Key',
+            liveValue: latestEncryptedKey !== 'N/A' ? String(latestEncryptedKey) : 'No messages yet',
+            liveHint: 'Only the recipient\'s private key can unwrap this. The server stores this blob but cannot read it.',
+            color: 'bg-blue-500',
+            Icon: KeyRound,
+        },
+        hashing: {
+            title: 'Hashing Mechanism',
+            value: 'SHA-256',
+            desc: 'Fixed-length message digest.',
+            howItWorks: 'Uses 64 rounds of compression functions based on bitwise operations (XOR, AND, OR, Shift) and modular addition.',
+            liveLabel: 'Live Integrity Hash',
+            liveValue: latestHash !== 'N/A' ? String(latestHash) : 'No messages yet',
+            liveHint: 'If even one bit of the ciphertext changes in transit, this hash will not match on arrival.',
+            color: 'bg-purple-500',
+            Icon: Hash,
+        },
+        hybrid: {
+            title: 'Hybrid Handshake',
+            value: 'RSA/AES-256',
+            desc: 'Combines efficiency with security.',
+            howItWorks: 'AES provides the performance (speed), while RSA provides the secure tunnel for the symmetric key delivery.',
+            liveLabel: 'Live IV + Key Size',
+            liveValue: latestIV !== 'N/A' ? `IV: ${String(latestIV).substring(0, 20)}…` : 'No messages yet',
+            liveHint: 'AES-256 needs a 256-bit key + 128-bit IV. RSA-2048 wraps the key. Together they form the hybrid handshake.',
+            color: 'bg-orange-500',
+            Icon: FileText,
+        },
+    };
+
+    const activeProtocol = protocolDetails[selectedProtocol];
+    const activeArch = archDetails[selectedArch];
 
     return (
         <div className="fixed bottom-28 md:bottom-6 right-6 z-[100]">
@@ -163,183 +298,116 @@ export const SecurityInsights: React.FC<SecurityInsightsProps> = ({ messages }) 
                                 </div>
                             ) : activeTab === 'protocol' ? (
                                 <div className="space-y-4">
-                                    <p className="text-[9px] font-black uppercase tracking-wider text-slate-500 px-1 border-l-2 border-primary-500 ml-1 pl-2">Data Transformation Pipeline</p>
+                                    {/* ── Pipeline Button Row ── */}
                                     <div className="space-y-2">
-                                        {[
-                                            {
-                                                title: 'Plaintext Message',
-                                                value: latestPlaintext,
-                                                desc: 'Raw UTF-8 input string before buffer conversion.',
-                                                howItWorks: 'The unencrypted data is encoded into a byte array, serving as the base for the encryption rounds.',
-                                                icon: 'bg-slate-500',
-                                                Icon: FileText
-                                            },
-                                            {
-                                                title: 'AES-256-CBC Ciphertext',
-                                                value: latestCiphertext,
-                                                desc: 'Advanced Encryption Standard with Cipher Block Chaining.',
-                                                howItWorks: 'Uses a 256-bit key to encrypt data in 128-bit blocks. Each block is XORed with the previous ciphertext block to eliminate patterns.',
-                                                icon: 'bg-emerald-500',
-                                                Icon: Lock
-                                            },
-                                            {
-                                                title: 'RSA-OAEP 2048 (Wrapped Key)',
-                                                value: latestEncryptedKey,
-                                                desc: 'Asymmetric Key Wrapping for secure transmission.',
-                                                howItWorks: 'The AES session key is encrypted using the recipient\'s RSA public key. OAEP padding adds unique randomness to every encryption.',
-                                                icon: 'bg-blue-500',
-                                                Icon: KeyRound
-                                            },
-                                            {
-                                                title: 'SHA-256 Integrity Hash',
-                                                value: latestHash,
-                                                desc: 'Cryptographic digest for tamper detection.',
-                                                howItWorks: 'Processes the entire payload through a one-way hashing algorithm. Even a 1-bit change in data results in a completely different 256-bit hash.',
-                                                icon: 'bg-purple-500',
-                                                Icon: Hash
-                                            },
-                                            {
-                                                title: 'Auth Tag / Signature',
-                                                value: `0x${latestHash.substring(0, 32).toUpperCase()}`,
-                                                desc: 'Message Authentication Code (MAC) for verification.',
-                                                howItWorks: 'A truncated portion of the hash or a GCM-generated tag used by the receiver to verify both authenticity and integrity instantly.',
-                                                icon: 'bg-pink-500',
-                                                Icon: Shield
-                                            }
-                                        ].map((item, i) => {
-                                            const isExpanded = expandedProtocol === i;
-                                            return (
-                                                <div key={i} className="group relative pl-6 border-l border-slate-800 pb-3 last:pb-0">
-                                                    <div className={`absolute left-[-5px] top-1 w-2.5 h-2.5 rounded-full ${item.icon} shadow-[0_0_8px_rgba(59,130,246,0.3)]`} />
-                                                    <button
-                                                        onClick={() => toggleProtocol(i)}
-                                                        className="w-full text-left flex items-center justify-between gap-2"
-                                                    >
-                                                        <div className="flex items-center gap-2">
-                                                            <item.Icon className="w-3 h-3 text-slate-500" />
-                                                            <p className="text-[10px] font-black text-white uppercase tracking-tight">{item.title}</p>
-                                                        </div>
-                                                        {isExpanded ? <ChevronUp className="w-3 h-3 text-slate-500" /> : <ChevronDown className="w-3 h-3 text-slate-500" />}
-                                                    </button>
-                                                    <AnimatePresence initial={false}>
-                                                        {isExpanded && (
-                                                            <motion.div
-                                                                initial={{ height: 0, opacity: 0 }}
-                                                                animate={{ height: 'auto', opacity: 1 }}
-                                                                exit={{ height: 0, opacity: 0 }}
-                                                                transition={{ duration: 0.2 }}
-                                                                className="overflow-hidden"
-                                                            >
-                                                                <div className="mt-2 space-y-1.5">
-                                                                    <div className="p-2 bg-black/40 rounded-xl border border-slate-800/50">
-                                                                        <p className="text-[10px] font-mono text-slate-300 break-all leading-relaxed cursor-help">{item.value}</p>
-                                                                    </div>
-                                                                    <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{item.desc}</p>
-                                                                    <p className="text-[9px] text-slate-400 leading-snug bg-slate-800/20 p-2 rounded-lg border-l border-primary-500/50">
-                                                                        <span className="text-primary-400 font-bold mr-1 italic">Underground Implementation:</span>
-                                                                        {item.howItWorks}
-                                                                    </p>
-                                                                </div>
-                                                            </motion.div>
-                                                        )}
-                                                    </AnimatePresence>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-
-                                    <div className="space-y-3 pt-2">
-                                        <p className="text-[9px] font-black uppercase tracking-wider text-slate-500 px-1 border-l-2 border-emerald-500 ml-1 pl-2">System Architecture & Core Logic</p>
-                                        <div className="space-y-2">
-                                            {[
-                                                {
-                                                    label: 'Symmetric Layer',
-                                                    val: 'AES-256-CBC',
-                                                    desc: 'Handles the bulk encryption of data.',
-                                                    underground: 'Implementation utilizes hardware acceleration (AES-NI) when available. Uses a unique Initialization Vector (IV) for every single message.',
-                                                    liveLabel: 'Live Ciphertext',
-                                                    liveValue: latestCiphertext !== 'N/A' ? String(latestCiphertext) : 'No messages yet',
-                                                    liveHint: 'Each message gets a fresh random IV — no two ciphertexts are ever identical for the same plaintext.',
-                                                    Icon: Lock
-                                                },
-                                                {
-                                                    label: 'Asymmetric Layer',
-                                                    val: 'RSA-OAEP 2048',
-                                                    desc: 'Solves the "Key Exchange" problem.',
-                                                    underground: 'The core utilizes prime number factorisation security. OAEP padding prevents adaptive chosen ciphertext attacks (CCA2).',
-                                                    liveLabel: 'Live Wrapped Key',
-                                                    liveValue: latestEncryptedKey !== 'N/A' ? String(latestEncryptedKey) : 'No messages yet',
-                                                    liveHint: 'Only the recipient\'s private key can unwrap this. The server stores this blob but cannot read it.',
-                                                    Icon: KeyRound
-                                                },
-                                                {
-                                                    label: 'Hashing Mechanism',
-                                                    val: 'SHA-256',
-                                                    desc: 'Fixed-length message digest.',
-                                                    underground: 'Uses 64 rounds of compression functions based on bitwise operations (XOR, AND, OR, Shift) and modular addition.',
-                                                    liveLabel: 'Live Integrity Hash',
-                                                    liveValue: latestHash !== 'N/A' ? String(latestHash) : 'No messages yet',
-                                                    liveHint: 'If even one bit of the ciphertext changes in transit, this hash will not match on arrival.',
-                                                    Icon: Hash
-                                                },
-                                                {
-                                                    label: 'Hybrid Handshake',
-                                                    val: 'RSA/AES-256',
-                                                    desc: 'Combines efficiency with security.',
-                                                    underground: 'AES provides the performance (speed), while RSA provides the secure tunnel for the symmetric key delivery.',
-                                                    liveLabel: 'Live IV + Key Size',
-                                                    liveValue: latestIV !== 'N/A' ? `IV: ${String(latestIV).substring(0, 20)}…` : 'No messages yet',
-                                                    liveHint: 'AES-256 needs a 256-bit key + 128-bit IV. RSA-2048 wraps the key. Together they form the hybrid handshake.',
-                                                    Icon: FileText
-                                                }
-                                            ].map((item, i) => {
-                                                const isExpanded = expandedArch === i;
+                                        <p className="text-[9px] font-black uppercase tracking-wider text-slate-500 px-1">Data Transformation Pipeline</p>
+                                        <div className="flex flex-wrap gap-1">
+                                            {protocolItems.map((item) => {
+                                                const detail = protocolDetails[item.key];
+                                                const isActive = selectedProtocol === item.key;
                                                 return (
-                                                    <div key={i} className="p-4 bg-slate-800/30 rounded-2xl border border-slate-700/30 hover:border-emerald-500/50 transition-all group">
-                                                        <button
-                                                            onClick={() => toggleArch(i)}
-                                                            className="w-full flex items-center justify-between mb-2"
-                                                        >
-                                                            <div className="flex items-center gap-2">
-                                                                <item.Icon className="w-3 h-3 text-emerald-500/60" />
-                                                                <span className="text-[10px] font-black text-slate-200 uppercase tracking-widest">{item.label}</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-md text-[9px] font-mono font-bold border border-emerald-500/30">{item.val}</span>
-                                                                {isExpanded ? <ChevronUp className="w-3 h-3 text-slate-500" /> : <ChevronDown className="w-3 h-3 text-slate-500" />}
-                                                            </div>
-                                                        </button>
-                                                        <p className="text-[10px] text-slate-400 leading-relaxed mb-2 font-bold">{item.desc}</p>
-                                                        <AnimatePresence initial={false}>
-                                                            {isExpanded && (
-                                                                <motion.div
-                                                                    initial={{ height: 0, opacity: 0 }}
-                                                                    animate={{ height: 'auto', opacity: 1 }}
-                                                                    exit={{ height: 0, opacity: 0 }}
-                                                                    transition={{ duration: 0.2 }}
-                                                                    className="overflow-hidden space-y-2"
-                                                                >
-                                                                    <div className="p-2.5 bg-black/40 rounded-xl border border-slate-800 group-hover:border-emerald-500/20 transition-colors">
-                                                                        <p className="text-[8px] font-black uppercase tracking-widest text-emerald-500/60 mb-1">{item.liveLabel}</p>
-                                                                        <p className="text-[9px] font-mono text-slate-300 break-all leading-relaxed cursor-help">{item.liveValue}</p>
-                                                                    </div>
-                                                                    <div className="p-2.5 bg-black/40 rounded-xl border border-slate-800 group-hover:border-emerald-500/20 transition-colors">
-                                                                        <p className="text-[9px] text-slate-500 italic leading-snug">
-                                                                            <span className="text-emerald-500/70 font-black not-italic mr-1 uppercase text-[8px]">Under the Hood:</span>
-                                                                            {item.underground}
-                                                                        </p>
-                                                                    </div>
-                                                                    <p className="text-[8px] text-slate-600 italic leading-snug">
-                                                                        💡 {item.liveHint}
-                                                                    </p>
-                                                                </motion.div>
-                                                            )}
-                                                        </AnimatePresence>
-                                                    </div>
+                                                    <button
+                                                        key={item.key}
+                                                        onClick={() => setSelectedProtocol(item.key)}
+                                                        className={`px-2.5 py-1.5 text-[8px] font-black uppercase tracking-widest rounded-t-xl transition-all flex items-center gap-1 ${isActive
+                                                            ? 'bg-slate-700/80 text-white border-b-2 border-white'
+                                                            : 'text-slate-400 hover:text-slate-200'
+                                                            }`}
+                                                    >
+                                                        <detail.Icon className="w-2.5 h-2.5" />
+                                                        {item.label}
+                                                    </button>
                                                 );
                                             })}
                                         </div>
                                     </div>
+
+                                    {/* ── Selected Pipeline Detail ── */}
+                                    <AnimatePresence mode="wait">
+                                        <motion.div
+                                            key={selectedProtocol}
+                                            initial={{ opacity: 0, y: 8 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -8 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="relative pl-6 border-l border-slate-800 space-y-2"
+                                        >
+                                            <div className={`absolute left-[-5px] top-1 w-2.5 h-2.5 rounded-full ${activeProtocol.color} shadow-[0_0_8px_rgba(59,130,246,0.3)]`} />
+                                            <div className="flex items-center gap-2">
+                                                <activeProtocol.Icon className="w-3 h-3 text-slate-500" />
+                                                <p className="text-[10px] font-black text-white uppercase tracking-tight">{activeProtocol.title}</p>
+                                            </div>
+                                            <div className="p-2 bg-black/40 rounded-xl border border-slate-800/50">
+                                                <p className="text-[10px] font-mono text-slate-300 break-all leading-relaxed cursor-help">{activeProtocol.value}</p>
+                                            </div>
+                                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{activeProtocol.desc}</p>
+                                            <p className="text-[9px] text-slate-400 leading-snug bg-slate-800/20 p-2 rounded-lg border-l border-primary-500/50">
+                                                <span className="text-primary-400 font-bold mr-1 italic">Underground Implementation:</span>
+                                                {activeProtocol.howItWorks}
+                                            </p>
+                                            <p className="text-[8px] text-slate-600 italic leading-snug">
+                                                💡 {activeProtocol.liveHint}
+                                            </p>
+                                        </motion.div>
+                                    </AnimatePresence>
+
+                                    {/* ── Architecture Button Row ── */}
+                                    <div className="space-y-2 pt-2">
+                                        <p className="text-[9px] font-black uppercase tracking-wider text-slate-500 px-1 border-l-2 border-emerald-500 ml-1 pl-2">System Architecture & Core Logic</p>
+                                        <div className="flex flex-wrap gap-1">
+                                            {archItems.map((item) => {
+                                                const detail = archDetails[item.key];
+                                                const isActive = selectedArch === item.key;
+                                                return (
+                                                    <button
+                                                        key={item.key}
+                                                        onClick={() => setSelectedArch(item.key)}
+                                                        className={`px-2.5 py-1.5 text-[8px] font-black uppercase tracking-widest rounded-t-xl transition-all flex items-center gap-1 ${isActive
+                                                            ? 'bg-slate-700/80 text-white border-b-2 border-white'
+                                                            : 'text-slate-400 hover:text-slate-200'
+                                                            }`}
+                                                    >
+                                                        <detail.Icon className="w-2.5 h-2.5" />
+                                                        {item.label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* ── Selected Architecture Detail ── */}
+                                    <AnimatePresence mode="wait">
+                                        <motion.div
+                                            key={selectedArch}
+                                            initial={{ opacity: 0, y: 8 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -8 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="p-4 bg-slate-800/30 rounded-2xl border border-slate-700/30"
+                                        >
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <activeArch.Icon className="w-3 h-3 text-emerald-500/60" />
+                                                    <span className="text-[10px] font-black text-slate-200 uppercase tracking-widest">{activeArch.title}</span>
+                                                </div>
+                                                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-md text-[9px] font-mono font-bold border border-emerald-500/30">{activeArch.value}</span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 leading-relaxed mb-2 font-bold">{activeArch.desc}</p>
+                                            <div className="p-2.5 bg-black/40 rounded-xl border border-slate-800 mb-2">
+                                                <p className="text-[8px] font-black uppercase tracking-widest text-emerald-500/60 mb-1">{activeArch.liveLabel}</p>
+                                                <p className="text-[9px] font-mono text-slate-300 break-all leading-relaxed cursor-help">{activeArch.liveValue}</p>
+                                            </div>
+                                            <div className="p-2.5 bg-black/40 rounded-xl border border-slate-800">
+                                                <p className="text-[9px] text-slate-500 italic leading-snug">
+                                                    <span className="text-emerald-500/70 font-black not-italic mr-1 uppercase text-[8px]">Under the Hood:</span>
+                                                    {activeArch.howItWorks}
+                                                </p>
+                                            </div>
+                                            <p className="text-[8px] text-slate-600 mt-1.5 italic leading-snug">
+                                                💡 {activeArch.liveHint}
+                                            </p>
+                                        </motion.div>
+                                    </AnimatePresence>
                                 </div>
                             ) : (
                                 <div className="space-y-4">
@@ -350,7 +418,6 @@ export const SecurityInsights: React.FC<SecurityInsightsProps> = ({ messages }) 
                                         </p>
                                     </div>
 
-                                    {/* Why This Matters callout */}
                                     <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl">
                                         <p className="text-[9px] font-black uppercase tracking-widest text-amber-400 mb-1">⚠️ Why This Matters</p>
                                         <p className="text-[9px] text-slate-400 leading-snug">
