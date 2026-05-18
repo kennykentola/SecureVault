@@ -16,13 +16,16 @@ const THEMES = [
 ];
 
 export const useTheme = () => {
-  const [theme, setTheme] = useState('light');
+  const [theme, setTheme] = useState(() => localStorage.getItem('app-theme') || 'light');
 
   useEffect(() => {
     const saved = localStorage.getItem('app-theme');
     if (saved) {
       setTheme(saved);
       document.documentElement.setAttribute('data-theme', saved);
+    } else {
+      localStorage.setItem('app-theme', 'light');
+      document.documentElement.setAttribute('data-theme', 'light');
     }
   }, []);
 

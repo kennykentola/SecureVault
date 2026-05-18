@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, Zap, Globe, Activity, Eye, Lock, Hash, KeyRound, FileText, ChevronDown } from 'lucide-react';
+import { Shield, Zap, Globe, Activity, Eye, Lock, Hash, KeyRound, FileText } from 'lucide-react';
 
 interface SecurityInsightsProps {
     messages: any[];
@@ -217,8 +217,8 @@ export const SecurityInsights: React.FC<SecurityInsightsProps> = ({ messages }) 
                             <button
                                 onClick={() => setActiveTab('metrics')}
                                 className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-t-xl transition-all ${activeTab === 'metrics'
-                                    ? 'bg-slate-700/80 text-white border-b-2 border-white'
-                                    : 'text-slate-400 hover:text-slate-200'
+                                    ? 'bg-white text-red-600 border-b-2 border-red-500 shadow-[0_0_0_1px_rgba(255,255,255,0.12)]'
+                                    : 'bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 hover:text-white border border-emerald-400/20'
                                     }`}
                             >
                                 Metrics
@@ -226,8 +226,8 @@ export const SecurityInsights: React.FC<SecurityInsightsProps> = ({ messages }) 
                             <button
                                 onClick={() => setActiveTab('protocol')}
                                 className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-t-xl transition-all ${activeTab === 'protocol'
-                                    ? 'bg-slate-700/80 text-white border-b-2 border-white'
-                                    : 'text-slate-400 hover:text-slate-200'
+                                    ? 'bg-white text-red-600 border-b-2 border-red-500 shadow-[0_0_0_1px_rgba(255,255,255,0.12)]'
+                                    : 'bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 hover:text-white border border-emerald-400/20'
                                     }`}
                             >
                                 Protocol
@@ -235,8 +235,8 @@ export const SecurityInsights: React.FC<SecurityInsightsProps> = ({ messages }) 
                             <button
                                 onClick={() => setActiveTab('mitm')}
                                 className={`px-3 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-t-xl transition-all ${activeTab === 'mitm'
-                                    ? 'bg-slate-700/80 text-white border-b-2 border-white'
-                                    : 'text-slate-400 hover:text-slate-200'
+                                    ? 'bg-white text-red-600 border-b-2 border-red-500 shadow-[0_0_0_1px_rgba(255,255,255,0.12)]'
+                                    : 'bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 hover:text-white border border-emerald-400/20'
                                     }`}
                             >
                                 MITM
@@ -310,8 +310,8 @@ export const SecurityInsights: React.FC<SecurityInsightsProps> = ({ messages }) 
                                                         key={item.key}
                                                         onClick={() => setSelectedProtocol(item.key)}
                                                         className={`px-2.5 py-1.5 text-[8px] font-black uppercase tracking-widest rounded-t-xl transition-all flex items-center gap-1 ${isActive
-                                                            ? 'bg-slate-700/80 text-white border-b-2 border-white'
-                                                            : 'text-slate-400 hover:text-slate-200'
+                                                            ? 'bg-white text-red-600 border-b-2 border-red-500 shadow-[0_0_0_1px_rgba(255,255,255,0.12)]'
+                                                            : 'bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 hover:text-white border border-emerald-400/20'
                                                             }`}
                                                     >
                                                         <detail.Icon className="w-2.5 h-2.5" />
@@ -363,8 +363,8 @@ export const SecurityInsights: React.FC<SecurityInsightsProps> = ({ messages }) 
                                                         key={item.key}
                                                         onClick={() => setSelectedArch(item.key)}
                                                         className={`px-2.5 py-1.5 text-[8px] font-black uppercase tracking-widest rounded-t-xl transition-all flex items-center gap-1 ${isActive
-                                                            ? 'bg-slate-700/80 text-white border-b-2 border-white'
-                                                            : 'text-slate-400 hover:text-slate-200'
+                                                            ? 'bg-white text-red-600 border-b-2 border-red-500 shadow-[0_0_0_1px_rgba(255,255,255,0.12)]'
+                                                            : 'bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20 hover:text-white border border-emerald-400/20'
                                                             }`}
                                                     >
                                                         <detail.Icon className="w-2.5 h-2.5" />
