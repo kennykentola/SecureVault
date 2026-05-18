@@ -29,7 +29,7 @@ import { SidebarChatItem } from '../components/SidebarChatItem';
 import { MessageBubble } from '../components/MessageBubble';
 import { ProfileSidePanel } from '../components/ProfileSidePanel';
 import { FindUsersModal } from '../components/FindUsersModal';
-import { SecurityDashboard } from '../components/SecurityDashboard';
+import { SecurityInsights } from '../components/SecurityInsights';
 import { CallHistory } from '../components/CallHistory';
 import { storage } from '../lib/appwrite';
 
@@ -42,7 +42,7 @@ export const Dashboard: React.FC = () => {
     const [messages, setMessages] = useState<any[]>([]);
     const [newMessage, setNewMessage] = useState("");
     const [showUnlockModal, setShowUnlockModal] = useState(false);
-    
+
     // Recovery states
     const [newRecoveryKey, setNewRecoveryKey] = useState<string | null>(null);
     const [isRecovering, setIsRecovering] = useState(false);
@@ -75,7 +75,7 @@ export const Dashboard: React.FC = () => {
     const [isKeyMismatch, setIsKeyMismatch] = useState(false);
     const [isRepairing, setIsRepairing] = useState(false);
     const [identityRepairReason, setIdentityRepairReason] = useState<'cloud_mismatch' | 'old_identity_message' | null>(null);
-    
+
     const [mutedChatIds, setMutedChatIds] = useState<Record<string, boolean>>(() => {
         if (typeof window === 'undefined') {
             return {};
@@ -88,7 +88,7 @@ export const Dashboard: React.FC = () => {
         }
     });
     const syncRequests = useRef<Map<string, number>>(new Map());
-    
+
     // Status System State
     const [showStatusViewer, setShowStatusViewer] = useState(false);
     const [showAddStatus, setShowAddStatus] = useState(false);
@@ -200,11 +200,11 @@ export const Dashboard: React.FC = () => {
             .replace(/[^a-zA-Z0-9-_]+/g, '-')
             .replace(/^-+|-+$/g, '')
             .slice(0, 40) || (type === 'voice' ? 'voice-note' : 'attachment');
-        
+
         if (type === 'voice') {
             return `${safeBaseName}.voice-note`;
         }
-        
+
         return `${safeBaseName}.${extension}`;
     };
     const getVoiceNoteFileName = (mimeType?: string) => {
@@ -320,7 +320,7 @@ export const Dashboard: React.FC = () => {
         if (typeof window === 'undefined') return;
         try {
             window.localStorage.setItem('securevault-muted-chats', JSON.stringify(mutedChatIds));
-        } catch {}
+        } catch { }
     }, [mutedChatIds]);
 
 
@@ -331,12 +331,12 @@ export const Dashboard: React.FC = () => {
             // Mark all unread messages from this chat as READ
             const chatId = getChatTargetId(selectedChat);
             if (!chatId) return;
-            const unreadFromThisChat = messages.filter(m => 
-                m.sender_id !== user?.$id && 
+            const unreadFromThisChat = messages.filter(m =>
+                m.sender_id !== user?.$id &&
                 messageMetadata[m.$id]?.status !== 'read' &&
                 (m.sender_id === chatId || m.receiver_id === chatId)
             );
-            
+
             unreadFromThisChat.forEach(m => {
                 sendMessage({
                     type: 'status_update',
@@ -460,7 +460,7 @@ export const Dashboard: React.FC = () => {
 
     const fetchInitialData = async () => {
         if (!user) return;
-        
+
         // Self-Healing: Clean up any duplicate profiles for the current user
         try {
             const res = await databases.listDocuments(
@@ -476,7 +476,7 @@ export const Dashboard: React.FC = () => {
                             APPWRITE_CONFIG.DATABASE_ID,
                             APPWRITE_CONFIG.COLLECTION_USERS,
                             doc.$id
-                        ).catch(() => {});
+                        ).catch(() => { });
                     }
                 }
             }
@@ -506,7 +506,7 @@ export const Dashboard: React.FC = () => {
             // Process backwards to find last message and count unreads
             res.documents.forEach(m => {
                 const chatId = m.sender_id === user?.$id ? m.receiver_id : m.sender_id;
-                
+
                 // Track last message (first one we encounter for each chatId is the latest)
                 if (!lastMsgs[chatId]) {
                     lastMsgs[chatId] = {
@@ -519,7 +519,7 @@ export const Dashboard: React.FC = () => {
                         try {
                             let text: string | null = null;
                             const isGrp = !!groups.find(g => g.$id === m.receiver_id);
-                            
+
                             if (isGrp) {
                                 const group = groups.find(g => g.$id === m.receiver_id);
                                 if (!group) return;
@@ -531,7 +531,7 @@ export const Dashboard: React.FC = () => {
                             if (text) {
                                 setLastMessages(prev => ({ ...prev, [chatId]: { ...prev[chatId], text } }));
                             }
-                        } catch {}
+                        } catch { }
                     })();
                 }
 
@@ -546,7 +546,7 @@ export const Dashboard: React.FC = () => {
     };
 
     const filteredUsers = React.useMemo(() => {
-        return networkUsers.filter(u => 
+        return networkUsers.filter(u =>
             (u.username || u.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
             (u.email || "").toLowerCase().includes(searchQuery.toLowerCase())
         );
@@ -651,14 +651,14 @@ export const Dashboard: React.FC = () => {
             const res = await databases.listDocuments(APPWRITE_CONFIG.DATABASE_ID, APPWRITE_CONFIG.COLLECTION_USERS, [
                 Query.equal("user_id", user?.$id)
             ]);
-            
+
             if (res.total > 0) {
                 const remotePubKey = res.documents[0].public_key;
                 if (localPubKey && remotePubKey && localPubKey !== remotePubKey) {
                     console.warn("[Security] Local and Remote public keys are out of sync! Triggering automatic repair...");
                     setIsKeyMismatch(true);
                     setIdentityRepairReason('cloud_mismatch');
-                    
+
                     // Silent auto-repair
                     try {
                         await databases.updateDocument(
@@ -738,82 +738,82 @@ export const Dashboard: React.FC = () => {
                 const isMedia = msg.payload.type === 'voice' || msg.payload.type === 'file';
                 const isGif = msg.payload.gif_url && !isMedia;
 
-            if (isGif) {
-                // GIF messages don't need decryption
-                decrypted = null;
-            } else if (msg.is_group || (selectedChat?.type === 'group' && msg.recipient_id === selectedChat.$id)) {
-                const group = groups.find(g => g.$id === msg.recipient_id || g.$id === selectedChat?.$id);
-                if (!group) return; 
-                
-                try {
-                    const groupKey = await decryptGroupKeyForChat(group);
-                    
-                    const payload = msg.payload.ciphertext ? msg.payload : (typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload);
+                if (isGif) {
+                    // GIF messages don't need decryption
+                    decrypted = null;
+                } else if (msg.is_group || (selectedChat?.type === 'group' && msg.recipient_id === selectedChat.$id)) {
+                    const group = groups.find(g => g.$id === msg.recipient_id || g.$id === selectedChat?.$id);
+                    if (!group) return;
 
-                    if (isMedia) {
-                        const decryptedKeyBase64 = await HybridEncryptor.decryptSymmetric(payload.encryptedKey, groupKey);
-                        mediaData = { ...msg.payload, ...payload, decryptedKeyBase64 };
-                    } else {
-                        decrypted = await HybridEncryptor.decryptSymmetric(payload, groupKey);
+                    try {
+                        const groupKey = await decryptGroupKeyForChat(group);
+
+                        const payload = msg.payload.ciphertext ? msg.payload : (typeof msg.payload === 'string' ? JSON.parse(msg.payload) : msg.payload);
+
+                        if (isMedia) {
+                            const decryptedKeyBase64 = await HybridEncryptor.decryptSymmetric(payload.encryptedKey, groupKey);
+                            mediaData = { ...msg.payload, ...payload, decryptedKeyBase64 };
+                        } else {
+                            decrypted = await HybridEncryptor.decryptSymmetric(payload, groupKey);
+                        }
+                    } catch (err) {
+                        console.warn(`[E2EE] Real-time group decryption failed:`, err);
+                        decrypted = "[Encrypted Group Message]";
                     }
-                } catch (err) {
-                    console.warn(`[E2EE] Real-time group decryption failed:`, err);
-                    decrypted = "[Encrypted Group Message]";
-                }
-            } else {
-                try {
-                    const isOwn = msg.sender_id === user?.$id;
-                    let keys = msg.payload.encryptedKey;
-                    if (typeof keys === 'string') {
-                        try {
-                            const clean = keys.trim();
-                            if (clean.startsWith('{') || clean.startsWith('[')) {
-                                keys = JSON.parse(clean);
-                            } else if (clean.startsWith('"')) {
-                                const parsedOnce = JSON.parse(clean);
-                                if (typeof parsedOnce === 'string' && (parsedOnce.startsWith('{') || parsedOnce.startsWith('['))) {
-                                    keys = JSON.parse(parsedOnce);
-                                } else {
-                                    keys = parsedOnce;
+                } else {
+                    try {
+                        const isOwn = msg.sender_id === user?.$id;
+                        let keys = msg.payload.encryptedKey;
+                        if (typeof keys === 'string') {
+                            try {
+                                const clean = keys.trim();
+                                if (clean.startsWith('{') || clean.startsWith('[')) {
+                                    keys = JSON.parse(clean);
+                                } else if (clean.startsWith('"')) {
+                                    const parsedOnce = JSON.parse(clean);
+                                    if (typeof parsedOnce === 'string' && (parsedOnce.startsWith('{') || parsedOnce.startsWith('['))) {
+                                        keys = JSON.parse(parsedOnce);
+                                    } else {
+                                        keys = parsedOnce;
+                                    }
                                 }
-                            }
-                        } catch (e) {}
-                    }
+                            } catch (e) { }
+                        }
 
-                    let dmKeyToUse = (typeof keys === 'string') ? keys : (keys?.encryptedKey || keys?.encrypted_key);
-                    
-                    if (isOwn) {
-                        const senderKey = (typeof keys === 'object') ? (keys?.encryptedKeySender || keys?.encrypted_key_sender) : null;
-                        if (senderKey) dmKeyToUse = senderKey;
-                    }
+                        let dmKeyToUse = (typeof keys === 'string') ? keys : (keys?.encryptedKey || keys?.encrypted_key);
 
-                    if (isMedia) {
-                        const decryptedKeyBase64 = await withPrivateKeyFallback((candidateKey) => (
-                            HybridEncryptor.decryptKeyWithRSA(dmKeyToUse, candidateKey)
-                        ));
-                        mediaData = { ...msg.payload, decryptedKeyBase64 };
-                    } else {
-                        decrypted = await withPrivateKeyFallback((candidateKey) => (
-                            HybridEncryptor.decrypt({ ...msg.payload, encryptedKey: dmKeyToUse }, candidateKey)
-                        ));
-                    }
-                } catch (decErr: any) {
-                    if (decErr.message === 'IDENTITY_MISMATCH' || decErr.name === 'OperationError') {
-                        flagDirectIdentityIssue();
-                        decrypted = OLD_IDENTITY_TEXT;
-                    } else {
-                        console.error("DM Decryption failed:", decErr);
-                        decrypted = "[Decryption Failed]";
+                        if (isOwn) {
+                            const senderKey = (typeof keys === 'object') ? (keys?.encryptedKeySender || keys?.encrypted_key_sender) : null;
+                            if (senderKey) dmKeyToUse = senderKey;
+                        }
+
+                        if (isMedia) {
+                            const decryptedKeyBase64 = await withPrivateKeyFallback((candidateKey) => (
+                                HybridEncryptor.decryptKeyWithRSA(dmKeyToUse, candidateKey)
+                            ));
+                            mediaData = { ...msg.payload, decryptedKeyBase64 };
+                        } else {
+                            decrypted = await withPrivateKeyFallback((candidateKey) => (
+                                HybridEncryptor.decrypt({ ...msg.payload, encryptedKey: dmKeyToUse }, candidateKey)
+                            ));
+                        }
+                    } catch (decErr: any) {
+                        if (decErr.message === 'IDENTITY_MISMATCH' || decErr.name === 'OperationError') {
+                            flagDirectIdentityIssue();
+                            decrypted = OLD_IDENTITY_TEXT;
+                        } else {
+                            console.error("DM Decryption failed:", decErr);
+                            decrypted = "[Decryption Failed]";
+                        }
                     }
                 }
             }
-        }
 
-            const newMsg = { 
-                ...msg.payload, 
+            const newMsg = {
+                ...msg.payload,
                 type: msg.payload.type || 'text',
-                text: msg.payload.gif_url ? '' : (decrypted || (msg.payload.type === 'voice' ? 'Voice message' : `File: ${msg.payload.fileName}`)), 
-                sender_id: msg.sender_id, 
+                text: msg.payload.gif_url ? '' : (decrypted || (msg.payload.type === 'voice' ? 'Voice message' : `File: ${msg.payload.fileName}`)),
+                sender_id: msg.sender_id,
                 $id: msg.$id,
                 gif_url: msg.payload.gif_url || null,
                 mediaData,
@@ -824,16 +824,16 @@ export const Dashboard: React.FC = () => {
                 encryptedKey: msg.payload.encryptedKey,
                 latency: HybridEncryptor.metrics.lastDecryptionTime
             };
-            
+
             const chatId = msg.is_group ? msg.recipient_id : msg.sender_id;
-            const isCurrentChat = msg.is_group 
+            const isCurrentChat = msg.is_group
                 ? (selectedChat?.$id === msg.recipient_id)
                 : (selectedChat?.$id === msg.sender_id || selectedChat?.user_id === msg.sender_id);
 
             if (isCurrentChat) {
                 setMessages(prev => [...prev.filter(m => m.$id !== msg.$id), newMsg]);
             }
-            
+
             // Update inbox preview
             setLastMessages(prev => ({
                 ...prev,
@@ -855,10 +855,10 @@ export const Dashboard: React.FC = () => {
                 recipientId: msg.sender_id,
                 payload: { timestamp: new Date().toISOString() }
             });
-        } catch (e: any) { 
+        } catch (e: any) {
             console.error("Decryption failed", e);
             const isMismatch = e.name === "OperationError" || e.message === 'IDENTITY_MISMATCH';
-            
+
             // Signal Session Repair for LIVE message
             if (isMismatch && msg.is_group) {
                 requestGroupKeySync(msg.recipient_id);
@@ -866,12 +866,12 @@ export const Dashboard: React.FC = () => {
                 flagDirectIdentityIssue();
             }
 
-            setMessages(prev => [...prev.filter(m => m.$id !== msg.$id), { 
-                ...msg.payload, 
+            setMessages(prev => [...prev.filter(m => m.$id !== msg.$id), {
+                ...msg.payload,
                 is_waiting: isMismatch && msg.is_group,
-                text: isMismatch ? (msg.is_group ? GROUP_WAITING_TEXT : OLD_IDENTITY_TEXT) : "[Decryption Failed]", 
-                sender_id: msg.sender_id, 
-                $id: msg.$id 
+                text: isMismatch ? (msg.is_group ? GROUP_WAITING_TEXT : OLD_IDENTITY_TEXT) : "[Decryption Failed]",
+                sender_id: msg.sender_id,
+                $id: msg.$id
             }]);
         }
     };
@@ -1049,14 +1049,14 @@ export const Dashboard: React.FC = () => {
 
     const renderMessageText = (text: string) => {
         if (!text) return null;
-        
+
         // 1. Highlight search query
         let content: any[] = [text];
         if (chatSearchQuery.length >= 2) {
             const regex = new RegExp(`(${chatSearchQuery})`, 'gi');
-            content = text.split(regex).map((part, i) => 
-                part.toLowerCase() === chatSearchQuery.toLowerCase() ? 
-                <span key={`h-${i}`} className="bg-yellow-400 text-black px-0.5 rounded font-bold shadow-sm">{part}</span> : part
+            content = text.split(regex).map((part, i) =>
+                part.toLowerCase() === chatSearchQuery.toLowerCase() ?
+                    <span key={`h-${i}`} className="bg-yellow-400 text-black px-0.5 rounded font-bold shadow-sm">{part}</span> : part
             );
         }
 
@@ -1090,7 +1090,7 @@ export const Dashboard: React.FC = () => {
 
     const handleSendMessage = async (textOverride?: string, gifUrl?: string) => {
         if (!newMessage.trim() && !textOverride && !gifUrl) return;
-        
+
         console.log("Attempting to send message. SelectedChat:", selectedChat?.$id, "Keys Unlocked:", !!privateKey);
 
         if (!selectedChat) return;
@@ -1122,7 +1122,7 @@ export const Dashboard: React.FC = () => {
                 } catch (e: any) {
                     console.error("[Security] Group key decryption failed:", e);
                     const isMismatch = e.name === 'OperationError' || e.message?.includes('decryption');
-                    
+
                     if (isMismatch) {
                         console.log("[Security] Attempting automatic session repair...");
                         requestGroupKeySync(selectedChat.$id);
@@ -1138,15 +1138,15 @@ export const Dashboard: React.FC = () => {
                     alert(`${selectedChat.username || "This user"} has not set up their secure vault yet. You cannot send them encrypted messages.`);
                     return;
                 }
-                
+
                 // 1. Generate AES key to share
                 const aesKey = await window.crypto.subtle.generateKey({ name: "AES-CBC", length: 256 }, true, ["encrypt", "decrypt"]);
                 const rawAesKey = await window.crypto.subtle.exportKey("raw", aesKey);
-                
+
                 // 2. Encrypt for Recipient
                 const recipientKey = await KeyManager.importPublicKey(publicKeyStr);
                 const encKeyRecipient = await HybridEncryptor.encryptKeyWithRSA(rawAesKey, recipientKey);
-                
+
                 // 3. Encrypt for Sender (Self-Access)
                 const myPublicKeyStr = await KeyManager.getPublicKey();
                 let encKeySender = null;
@@ -1156,13 +1156,13 @@ export const Dashboard: React.FC = () => {
                         encKeySender = await HybridEncryptor.encryptKeyWithRSA(rawAesKey, myPublicKey);
                     } catch (e) { console.error("Self-encryption failed", e); }
                 }
-                
+
                 // 4. Perform Symmetric Encryption
                 const encryptedSymmetric = await HybridEncryptor.encryptSymmetric(content, aesKey);
-                encrypted = { 
-                    ...encryptedSymmetric, 
+                encrypted = {
+                    ...encryptedSymmetric,
                     encryptedKey: encKeyRecipient,
-                    encryptedKeySender: encKeySender 
+                    encryptedKeySender: encKeySender
                 };
             }
 
@@ -1187,7 +1187,7 @@ export const Dashboard: React.FC = () => {
                 alert("Message could not be sent. Check your secure connection.");
                 return;
             }
-            
+
             // Log to group_media if it's a file or link
             if (isGroup && (gifUrl || content.includes("http"))) {
                 try {
@@ -1202,12 +1202,12 @@ export const Dashboard: React.FC = () => {
                 } catch (e) { console.error("Media logging failed", e); }
             }
 
-            setMessages(prev => [...prev, { 
-                $id: tempId, 
-                ...msgPacket.payload, 
-                text: content, 
+            setMessages(prev => [...prev, {
+                $id: tempId,
+                ...msgPacket.payload,
+                text: content,
                 type: 'text',
-                sender_id: user?.$id, 
+                sender_id: user?.$id,
                 reply_to: replyTo,
                 latency: HybridEncryptor.metrics.lastEncryptionTime
             }]);
@@ -1217,11 +1217,11 @@ export const Dashboard: React.FC = () => {
                 ...prev,
                 [chatTargetId]: { text: content, timestamp: msgPacket.payload.timestamp, sender_id: user?.$id }
             }));
-            
+
             setNewMessage("");
             setShowGiphy(false);
             setReplyTo(null);
-        } catch (e) { 
+        } catch (e) {
             console.error(e);
             alert("Encryption or delivery failed. If you recently changed your vault PIN, please refresh the application.");
         }
@@ -1388,10 +1388,10 @@ export const Dashboard: React.FC = () => {
                 }
 
                 const recipientPubKey = await KeyManager.importPublicKey(recipientPublicKeyStr);
-                
+
                 // Encrypt for Recipient
                 const encKeyRecipient = await HybridEncryptor.encryptKeyWithRSA(rawFileKey, recipientPubKey);
-                
+
                 // Encrypt for Sender (Self-Access)
                 const myPublicKeyStr = await KeyManager.getPublicKey();
                 let encKeySender = null;
@@ -1463,7 +1463,7 @@ export const Dashboard: React.FC = () => {
                 console.warn("Selected chat is missing a canonical recipient id.");
                 return;
             }
-            
+
             let res;
             if (isGroup) {
                 res = await databases.listDocuments(
@@ -1488,18 +1488,18 @@ export const Dashboard: React.FC = () => {
                 ]);
 
                 // Filter for messages specifically between user and chatIdentifier
-                const filteredDocs = [...sent.documents, ...received.documents].filter(m => 
+                const filteredDocs = [...sent.documents, ...received.documents].filter(m =>
                     (m.sender_id === user?.$id && m.receiver_id === chatIdentifier) ||
                     (m.sender_id === chatIdentifier && m.receiver_id === user?.$id)
                 );
 
                 res = {
-                    documents: filteredDocs.sort((a, b) => 
+                    documents: filteredDocs.sort((a, b) =>
                         new Date(a.timestamp || a.$createdAt).getTime() - new Date(b.timestamp || b.$createdAt).getTime()
                     )
                 };
             }
-            
+
             const messageIds = res.documents.map(m => m.$id);
             fetchReactions(messageIds);
 
@@ -1509,7 +1509,7 @@ export const Dashboard: React.FC = () => {
                     Query.equal("msg_id", messageIds),
                     Query.limit(100)
                 ]);
-                
+
                 const metaMap: Record<string, any> = {};
                 metaRes.documents.forEach(m => {
                     metaMap[m.msg_id] = { status: m.status };
@@ -1540,7 +1540,7 @@ export const Dashboard: React.FC = () => {
                                     HybridEncryptor.decryptKeyWithRSA(groupKeyStr, candidateKey)
                                 ));
                                 const groupKey = await KeyManager.importSecretKey(decryptedGroupKey);
-                                
+
                                 const keysRaw = m.encrypted_key || m.encryptedKey;
                                 let keys = keysRaw;
                                 try {
@@ -1557,7 +1557,7 @@ export const Dashboard: React.FC = () => {
                                             }
                                         }
                                     }
-                                } catch (e) {}
+                                } catch (e) { }
                                 const msgPayload = (typeof m.payload === 'string') ? JSON.parse(m.payload) : (m.payload || m);
                                 resolvedPayload = typeof msgPayload === 'object' && msgPayload ? msgPayload : {};
 
@@ -1571,16 +1571,16 @@ export const Dashboard: React.FC = () => {
                             }
                         } catch (err: any) {
                             const isMismatch = err.name === "OperationError" || err.message === 'IDENTITY_MISMATCH';
-                            
+
                             // Signal Session Repair for historical group message
                             if (isMismatch) {
                                 requestGroupKeySync(m.receiver_id);
                             }
 
-                            return { 
-                                ...m, 
+                            return {
+                                ...m,
                                 is_waiting: isMismatch,
-                                text: isMismatch ? GROUP_WAITING_TEXT : "[Encrypted Group Message]" 
+                                text: isMismatch ? GROUP_WAITING_TEXT : "[Encrypted Group Message]"
                             };
                         }
                     } else {
@@ -1588,7 +1588,7 @@ export const Dashboard: React.FC = () => {
                             const isOwn = m.sender_id === user?.$id;
                             const msgPayload = (typeof m.payload === 'string') ? JSON.parse(m.payload) : (m.payload || m);
                             resolvedPayload = typeof msgPayload === 'object' && msgPayload ? msgPayload : {};
-                            
+
                             let keys = m.encrypted_key || m.encryptedKey;
                             if (typeof keys === 'string') {
                                 try {
@@ -1614,7 +1614,7 @@ export const Dashboard: React.FC = () => {
                                 const senderKey = (typeof keys === 'object') ? (keys?.encryptedKeySender || keys?.encrypted_key_sender) : null;
                                 if (senderKey) dmKeyToUse = senderKey;
                             }
-                            
+
                             if (m.type === 'call') {
                                 // Call logs are often stored as plain markers for backward compatibility
                                 text = (typeof m.text === 'string' && m.text.startsWith('CALL_LOG_')) ? m.text : (m.text || "Call log sync");
@@ -1653,15 +1653,15 @@ export const Dashboard: React.FC = () => {
                                 // cannot be recovered by repairing anyway. The placeholder text is enough.
                             }
 
-                            return { 
-                                ...m, 
+                            return {
+                                ...m,
                                 is_waiting: isMismatch && isGroup,
-                                text: isMismatch ? OLD_IDENTITY_TEXT : "[Decryption Failed]" 
+                                text: isMismatch ? OLD_IDENTITY_TEXT : "[Decryption Failed]"
                             };
                         }
                     }
-                    return { 
-                        ...m, 
+                    return {
+                        ...m,
                         ...resolvedPayload,
                         fileName: resolvedPayload.fileName || m.fileName || m.filename || (resolvedPayload.text?.startsWith('File: ') ? resolvedPayload.text.replace('File: ', '') : null),
                         text: text || ((resolvedPayload.type || m.type) === 'voice' ? 'Voice message' : `File: ${resolvedPayload.fileName || m.fileName || m.filename || 'Attachment'}`),
@@ -1672,20 +1672,20 @@ export const Dashboard: React.FC = () => {
                     // Diagnostic logging for decryption failures
                     console.error(`[E2EE] Decryption failed for message ${m.$id}:`, err);
                     const isMismatch = err.name === "OperationError" || err.message === 'IDENTITY_MISMATCH';
-                    
+
                     if (isMismatch && m.is_group) {
                         requestGroupKeySync(m.receiver_id || selectedChat?.$id);
                     } else if (isMismatch) {
                         // Historical DM mismatch - no need to flag global repair
                     }
                     const isMalformed = err.message.includes("Missing ciphertext");
-                    
-                    return { 
-                        ...m, 
+
+                    return {
+                        ...m,
                         is_waiting: isMismatch && m.is_group,
-                        text: isMismatch ? (m.is_group ? GROUP_WAITING_TEXT : OLD_IDENTITY_TEXT) : 
-                              isMalformed ? "[Malformed Encrypted Payload]" :
-                              "[Decryption Failed]" 
+                        text: isMismatch ? (m.is_group ? GROUP_WAITING_TEXT : OLD_IDENTITY_TEXT) :
+                            isMalformed ? "[Malformed Encrypted Payload]" :
+                                "[Decryption Failed]"
                     };
                 }
             }));
@@ -1696,7 +1696,7 @@ export const Dashboard: React.FC = () => {
     const handleUnlock = async (pin: string) => {
         try {
             await unlockKeys(pin);
-            
+
             setShowUnlockModal(false);
 
             // Self-Healing: Background sync public key if missing from Appwrite
@@ -1709,7 +1709,7 @@ export const Dashboard: React.FC = () => {
                             APPWRITE_CONFIG.COLLECTION_USERS,
                             [Query.equal("user_id", user?.$id)]
                         );
-                        
+
                         if (userData.total > 0) {
                             const doc = userData.documents[0];
                             // If neither field has the key, or if it's different, sync it
@@ -1758,7 +1758,7 @@ export const Dashboard: React.FC = () => {
                     ]
                 );
                 // Merge with existing users to avoid duplicates and preserve status
-                const newUsers = res.documents.filter(nu => 
+                const newUsers = res.documents.filter(nu =>
                     nu.user_id !== user?.$id && !networkUsers.some(ou => ou.user_id === nu.user_id)
                 );
                 if (newUsers.length > 0) {
@@ -1862,8 +1862,8 @@ export const Dashboard: React.FC = () => {
                             </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                            <button 
-                                onClick={() => setIsMobileSidebarOpen(false)} 
+                            <button
+                                onClick={() => setIsMobileSidebarOpen(false)}
                                 className="md:hidden p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg shadow-black/20"
                                 aria-label="Close sidebar"
                                 title="Close sidebar"
@@ -1871,8 +1871,8 @@ export const Dashboard: React.FC = () => {
                                 <X className="w-5 h-5" />
                             </button>
                             <div className="relative">
-                                <button 
-                                    onClick={() => setShowTopMenu(!showTopMenu)} 
+                                <button
+                                    onClick={() => setShowTopMenu(!showTopMenu)}
                                     className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-500 hover:text-slate-900"
                                     aria-label="Menu"
                                     title="Menu"
@@ -1895,14 +1895,14 @@ export const Dashboard: React.FC = () => {
                                         </button>
                                         {selectedChat && selectedChat.type !== 'group' && (
                                             <div className="md:hidden border-t border-slate-100 my-1 py-1">
-                                            <button onClick={() => { handleStartCall('voice'); setShowTopMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-800 hover:bg-slate-50 transition-colors flex items-center gap-3">
-                                                <Phone className="w-4 h-4 text-slate-600" />
-                                                Voice Call
-                                            </button>
-                                            <button onClick={() => { handleStartCall('video'); setShowTopMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-800 hover:bg-slate-50 transition-colors flex items-center gap-3">
-                                                <Video className="w-4 h-4 text-slate-600" />
-                                                Video Call
-                                            </button>
+                                                <button onClick={() => { handleStartCall('voice'); setShowTopMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-800 hover:bg-slate-50 transition-colors flex items-center gap-3">
+                                                    <Phone className="w-4 h-4 text-slate-600" />
+                                                    Voice Call
+                                                </button>
+                                                <button onClick={() => { handleStartCall('video'); setShowTopMenu(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-800 hover:bg-slate-50 transition-colors flex items-center gap-3">
+                                                    <Video className="w-4 h-4 text-slate-600" />
+                                                    Video Call
+                                                </button>
                                             </div>
                                         )}
                                     </div>
@@ -1927,7 +1927,7 @@ export const Dashboard: React.FC = () => {
                     </div>
                     {(isKeyMismatch || identityRepairReason === 'old_identity_message') && (
                         <div className="mb-4 p-4 rounded-2xl bg-primary-500/10 border border-primary-500/30 flex flex-col gap-3 relative group/banner">
-                            <button 
+                            <button
                                 onClick={() => { setIsKeyMismatch(false); setIdentityRepairReason(null); }}
                                 className="absolute top-2 right-2 p-1 hover:bg-white/10 rounded-lg text-slate-500 transition-colors"
                                 aria-label="Dismiss banner"
@@ -2022,9 +2022,9 @@ export const Dashboard: React.FC = () => {
                     )}
 
                     {sidebarTab === 'updates' && (
-                        <StatusList 
-                            user={user} 
-                            onAdd={() => setShowAddStatus(true)} 
+                        <StatusList
+                            user={user}
+                            onAdd={() => setShowAddStatus(true)}
                             onView={(statuses, index) => {
                                 setSelectedStatuses(statuses);
                                 setStatusIndex(index);
@@ -2035,14 +2035,14 @@ export const Dashboard: React.FC = () => {
                     )}
 
                     {sidebarTab === 'calls' && (
-                        <CallHistory 
-                            user={user} 
+                        <CallHistory
+                            user={user}
                             onStartCall={(id, type, _name) => {
                                 // Find user object to set as selected chat
                                 const u = networkUsers.find(nu => nu.user_id === id);
                                 if (u) setSelectedChat(u);
                                 handleStartCall(type);
-                            }} 
+                            }}
                         />
                     )}
                 </div>
@@ -2059,7 +2059,7 @@ export const Dashboard: React.FC = () => {
                                 <p className="text-[10px] text-slate-500 truncate">{user?.email}</p>
                             </div>
                         </div>
-                        <button 
+                        <button
                             onClick={handleLogout}
                             className="p-2 rounded-xl hover:bg-red-50 text-red-500 hover:text-red-600 transition-colors shrink-0"
                             title="Log Out"
@@ -2073,268 +2073,268 @@ export const Dashboard: React.FC = () => {
             {/* Main Chat Area */}
             <main className="flex-1 flex flex-row relative bg-transparent overflow-hidden">
                 <div className="flex-1 flex flex-col min-w-0">
-                {selectedChat ? (
-                    <>
-                        {/* Chat Header */}
-                        <header className="h-16 md:h-20 glass-header flex items-center justify-between px-4 md:px-8 z-10">
-                            <div className="flex items-center gap-4">
-                                <button 
-                                    onClick={() => setIsMobileSidebarOpen(true)} 
-                                    className="md:hidden p-2 hover:bg-slate-200 rounded-lg transition-colors"
-                                    aria-label="Open sidebar"
-                                    title="Open sidebar"
-                                >
-                                    <Menu className="w-5 h-5 text-slate-600" />
-                                </button>
-                                {!privateKey && (
-                                    <button 
-                                        onClick={() => setShowUnlockModal(true)} 
-                                        className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-600"
-                                        aria-label="Unlock vault"
-                                        title="Unlock vault"
+                    {selectedChat ? (
+                        <>
+                            {/* Chat Header */}
+                            <header className="h-16 md:h-20 glass-header flex items-center justify-between px-4 md:px-8 z-10">
+                                <div className="flex items-center gap-4">
+                                    <button
+                                        onClick={() => setIsMobileSidebarOpen(true)}
+                                        className="md:hidden p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                                        aria-label="Open sidebar"
+                                        title="Open sidebar"
                                     >
-                                        <LockIcon className="w-5 h-5" />
+                                        <Menu className="w-5 h-5 text-slate-600" />
                                     </button>
-                                )}
-                                <div 
-                                    className="flex items-center gap-4 cursor-pointer group"
-                                    onClick={() => setShowProfilePanel(true)}
-                                >
-                                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-slate-200 border border-slate-300 overflow-hidden shadow-sm group-hover:scale-105 transition-transform">
-                                        {selectedChat.avatar_id ? (
-                                            <img src={getUserAvatar(selectedChat.avatar_id)} alt="" className="w-full h-full object-cover" />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-xl font-black text-slate-400 bg-slate-100 uppercase">
-                                                { (selectedChat.username || selectedChat.name)?.[0] }
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="flex flex-col min-w-0">
-                                        <h3 className="font-bold tracking-tight text-slate-800 group-hover:text-blue-600 transition-colors leading-tight truncate max-w-[80px] sm:max-w-[150px]">
-                                            {selectedChat.username || selectedChat.name}
-                                        </h3>
-                                        <div className="flex items-center gap-2">
-                                            {typingUsers.length > 0 ? (
-                                                <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest animate-pulse truncate">
-                                                    {typingUsers.length > 1 ? `${typingUsers.length} typing` : `${typingUsers[0]} typing`}
-                                                </span>
+                                    {!privateKey && (
+                                        <button
+                                            onClick={() => setShowUnlockModal(true)}
+                                            className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-600"
+                                            aria-label="Unlock vault"
+                                            title="Unlock vault"
+                                        >
+                                            <LockIcon className="w-5 h-5" />
+                                        </button>
+                                    )}
+                                    <div
+                                        className="flex items-center gap-4 cursor-pointer group"
+                                        onClick={() => setShowProfilePanel(true)}
+                                    >
+                                        <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-slate-200 border border-slate-300 overflow-hidden shadow-sm group-hover:scale-105 transition-transform">
+                                            {selectedChat.avatar_id ? (
+                                                <img src={getUserAvatar(selectedChat.avatar_id)} alt="" className="w-full h-full object-cover" />
                                             ) : (
-                                                <div className="flex items-center gap-1.5 text-blue-600/60">
-                                                    <LockIcon className="w-2.5 h-2.5" />
-                                                    <span className="text-[9px] font-bold uppercase tracking-widest hidden sm:inline">End-to-End Encrypted</span>
-                                                    <span className="text-[9px] font-bold uppercase tracking-widest sm:hidden">Secure</span>
+                                                <div className="w-full h-full flex items-center justify-center text-xl font-black text-slate-400 bg-slate-100 uppercase">
+                                                    {(selectedChat.username || selectedChat.name)?.[0]}
                                                 </div>
                                             )}
                                         </div>
-                                    </div>
+                                        <div className="flex flex-col min-w-0">
+                                            <h3 className="font-bold tracking-tight text-slate-800 group-hover:text-blue-600 transition-colors leading-tight truncate max-w-[80px] sm:max-w-[150px]">
+                                                {selectedChat.username || selectedChat.name}
+                                            </h3>
+                                            <div className="flex items-center gap-2">
+                                                {typingUsers.length > 0 ? (
+                                                    <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest animate-pulse truncate">
+                                                        {typingUsers.length > 1 ? `${typingUsers.length} typing` : `${typingUsers[0]} typing`}
+                                                    </span>
+                                                ) : (
+                                                    <div className="flex items-center gap-1.5 text-blue-600/60">
+                                                        <LockIcon className="w-2.5 h-2.5" />
+                                                        <span className="text-[9px] font-bold uppercase tracking-widest hidden sm:inline">End-to-End Encrypted</span>
+                                                        <span className="text-[9px] font-bold uppercase tracking-widest sm:hidden">Secure</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            <div className="flex items-center gap-1 md:gap-3">
-                                <div className={`flex items-center bg-slate-100 rounded-2xl px-3 py-1 transition-all ${showSearch ? 'w-32 sm:w-48 opacity-100' : 'w-0 opacity-0 overflow-hidden'}`}>
-                                    <Search className="w-4 h-4 text-slate-400 shrink-0" />
-                                    <input 
-                                        className="bg-transparent border-none outline-none text-xs text-slate-700 w-full ml-2" 
-                                        placeholder="Search chat..." 
-                                        value={chatSearchQuery}
-                                        onChange={(e) => setChatSearchQuery(e.target.value)}
-                                    />
-                                </div>
-
-                                <button 
-                                    onClick={() => setShowSearch(!showSearch)} 
-                                    className={`p-2.5 md:p-3 rounded-2xl transition-all ${showSearch ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'}`}
-                                    aria-label="Toggle search"
-                                    title="Toggle search"
-                                >
-                                    <Search className="w-5 h-5" />
-                                </button>
-                                {showSearch && (
-                                    <div className="flex gap-2 mr-2">
-                                        <button 
-                                            onClick={() => setSearchFilters(prev => ({ ...prev, media: !prev.media }))}
-                                            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${searchFilters.media ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}
-                                        >
-                                            Media
-                                        </button>
-                                        <button 
-                                            onClick={() => setSearchFilters(prev => ({ ...prev, links: !prev.links }))}
-                                            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${searchFilters.links ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}
-                                        >
-                                            Links
-                                        </button>
-                                    </div>
-                                )}
-                                {selectedChat.type === 'group' && (
-                                    <button 
-                                        onClick={() => setShowAddMember(true)} 
-                                        className="p-2.5 md:p-3 bg-indigo-50 hover:bg-indigo-100 rounded-2xl transition-all text-indigo-600"
-                                        aria-label="Add member"
-                                        title="Add member"
-                                    >
-                                        <Plus className="w-5 h-5" />
-                                    </button>
-                                )}
-                                {selectedChat.type !== 'group' && (
-                                    <>
-                                        <button 
-                                            onClick={() => handleStartCall('voice')} 
-                                            className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"
-                                            aria-label="Voice call"
-                                            title="Voice call"
-                                        >
-                                            <Phone className="w-4 h-4 md:w-5 md:h-5" />
-                                        </button>
-                                        <button 
-                                            onClick={() => handleStartCall('video')} 
-                                            className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"
-                                            aria-label="Video call"
-                                            title="Video call"
-                                        >
-                                            <Video className="w-4 h-4 md:w-5 md:h-5" />
-                                        </button>
-                                    </>
-                                )}
-                                <button 
-                                    onClick={() => selectedChat.type === 'group' ? setShowGroupDetail(true) : setShowProfilePanel(true)} 
-                                    className="p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"
-                                    aria-label="More options"
-                                    title="More options"
-                                >
-                                    <MoreVertical className="w-4 h-4 md:w-5 md:h-5" />
-                                </button>
-                            </div>
-                        </header>
-
-                        {/* Messages */}
-                        <div 
-                            ref={scrollRef} 
-                            className="flex-1 overflow-y-auto p-4 md:p-8 pt-6 md:pt-8 space-y-4 md:space-y-6 scroll-hide relative bg-transparent"
-                        >
-                            {messages.filter(m => {
-                                const searchText = (m.text as string || "").toLowerCase();
-                                const matchesSearch = searchText.includes(chatSearchQuery.toLowerCase());
-                                const isMedia = m.type === 'voice' || m.type === 'file' || m.gif_url;
-                                const isLink = searchText.includes("http");
-                                
-                                if (searchFilters.media && !isMedia) return false;
-                                if (searchFilters.links && !isLink) return false;
-                                return matchesSearch;
-                            }).map((msg, i) => (
-                                <MessageBubble
-                                    key={msg.$id || i}
-                                    msg={msg}
-                                    isOwn={msg.sender_id === user?.$id}
-                                    onReply={() => setReplyTo(msg)}
-                                    onEdit={() => {
-                                        setEditingMessage(msg);
-                                        setNewMessage(msg.text);
-                                    }}
-                                    onDelete={(everyone) => handleDeleteMessage(msg.$id, everyone)}
-                                    onForward={() => handleForwardMessage(msg)}
-                                    onAddReaction={(emoji) => handleAddReaction(msg.$id, emoji)}
-                                    reactions={reactions[msg.$id]}
-                                    status={messageMetadata[msg.$id]?.status || 'sent'}
-                                    renderText={renderMessageText}
-                                />
-                            ))}
-                        </div>
-
-                        {/* Input Area */}
-                        <footer className="p-4 md:p-8 glass-footer relative z-20">
-                            <div className="max-w-5xl mx-auto relative">
-                                <AnimatePresence>
-                                    {editingMessage && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: 10 }}
-                                            className="mb-4 p-3 bg-blue-900/30 rounded-2xl border-l-4 border-blue-500 backdrop-blur-xl"
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex-1">
-                                                    <p className="text-[10px] font-black text-blue-400 mb-1 uppercase tracking-widest">Editing Message</p>
-                                                    <p className="text-sm text-slate-200 truncate">{editingMessage.text}</p>
-                                                </div>
-                                                <button 
-                                                    onClick={() => { setEditingMessage(null); setNewMessage(""); }} 
-                                                    className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg"
-                                                    aria-label="Cancel editing"
-                                                    title="Cancel editing"
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </motion.div>
-                                    )}
-                                    {replyTo && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: 10 }}
-                                            className="mb-4 p-3 bg-slate-800/50 rounded-2xl border-l-4 border-emerald-500 backdrop-blur-xl"
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex-1">
-                                                    <p className="text-[10px] font-black text-emerald-400 mb-1 uppercase tracking-widest">Replying to {replyTo.sender_name || selectedChat.username}</p>
-                                                    <p className="text-sm text-slate-200 truncate">{replyTo.text || 'Voice/Media'}</p>
-                                                </div>
-                                                <button 
-                                                    onClick={() => setReplyTo(null)} 
-                                                    className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg"
-                                                    aria-label="Cancel reply"
-                                                    title="Cancel reply"
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </motion.div>
-                                    )}
-                                    {showGiphy && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                                            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-                                            className="absolute bottom-full left-1/2 -translate-x-1/2 md:left-0 md:translate-x-0 mb-4 md:mb-6 z-50 overflow-visible"
-                                        >
-                                            <GiphyPicker onSelect={(gif) => handleSendMessage(undefined, gif.images.fixed_height.url)} onClose={() => setShowGiphy(false)} />
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-
-                                <div className="flex items-end gap-2 md:gap-4 bg-white/3 border border-white/10 rounded-4xl md:rounded-[3rem] p-2 md:p-3 pr-3 md:pr-5 focus-within:border-primary-500/50 focus-within:bg-white/5 transition-all shadow-3xl backdrop-blur-2xl">
-                                    <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
-                                        <input 
-                                            type="file" 
-                                            ref={fileInputRef} 
-                                            className="hidden" 
-                                            aria-label="Upload file"
-                                            title="Upload file"
-                                            onChange={(e) => {
-                                                const file = e.target.files?.[0];
-                                                if (file) handleMediaUpload(file, 'file');
-                                                e.currentTarget.value = '';
-                                            }} 
+                                <div className="flex items-center gap-1 md:gap-3">
+                                    <div className={`flex items-center bg-slate-100 rounded-2xl px-3 py-1 transition-all ${showSearch ? 'w-32 sm:w-48 opacity-100' : 'w-0 opacity-0 overflow-hidden'}`}>
+                                        <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                                        <input
+                                            className="bg-transparent border-none outline-none text-xs text-slate-700 w-full ml-2"
+                                            placeholder="Search chat..."
+                                            value={chatSearchQuery}
+                                            onChange={(e) => setChatSearchQuery(e.target.value)}
                                         />
-                                        <button 
-                                            type="button"
-                                            onClick={() => fileInputRef.current?.click()}
-                                            disabled={isVoiceUploading}
-                                            className={`p-3 md:p-4 hover:bg-white/10 rounded-full transition-colors text-slate-500 hover:text-white ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                            aria-label="Attach file"
-                                            title="Attach file"
-                                        >
-                                            <Paperclip className="w-5 h-5 md:w-6 md:h-6" />
-                                        </button>
-                                        <button 
-                                            type="button"
-                                            onClick={() => setShowGiphy(!showGiphy)} 
-                                            disabled={isVoiceUploading}
-                                            className={`p-3 md:p-4 rounded-full transition-colors ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''} ${showGiphy ? 'bg-primary-600 text-white' : 'hover:bg-white/10 text-slate-500 hover:text-white'}`}
-                                            aria-label="Choose emoji or GIF"
-                                            title="Choose emoji or GIF"
-                                        ><Smile className="w-5 h-5 md:w-6 md:h-6" /></button>
                                     </div>
-                                    
+
+                                    <button
+                                        onClick={() => setShowSearch(!showSearch)}
+                                        className={`p-2.5 md:p-3 rounded-2xl transition-all ${showSearch ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'}`}
+                                        aria-label="Toggle search"
+                                        title="Toggle search"
+                                    >
+                                        <Search className="w-5 h-5" />
+                                    </button>
+                                    {showSearch && (
+                                        <div className="flex gap-2 mr-2">
+                                            <button
+                                                onClick={() => setSearchFilters(prev => ({ ...prev, media: !prev.media }))}
+                                                className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${searchFilters.media ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}
+                                            >
+                                                Media
+                                            </button>
+                                            <button
+                                                onClick={() => setSearchFilters(prev => ({ ...prev, links: !prev.links }))}
+                                                className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${searchFilters.links ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}
+                                            >
+                                                Links
+                                            </button>
+                                        </div>
+                                    )}
+                                    {selectedChat.type === 'group' && (
+                                        <button
+                                            onClick={() => setShowAddMember(true)}
+                                            className="p-2.5 md:p-3 bg-indigo-50 hover:bg-indigo-100 rounded-2xl transition-all text-indigo-600"
+                                            aria-label="Add member"
+                                            title="Add member"
+                                        >
+                                            <Plus className="w-5 h-5" />
+                                        </button>
+                                    )}
+                                    {selectedChat.type !== 'group' && (
+                                        <>
+                                            <button
+                                                onClick={() => handleStartCall('voice')}
+                                                className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"
+                                                aria-label="Voice call"
+                                                title="Voice call"
+                                            >
+                                                <Phone className="w-4 h-4 md:w-5 md:h-5" />
+                                            </button>
+                                            <button
+                                                onClick={() => handleStartCall('video')}
+                                                className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"
+                                                aria-label="Video call"
+                                                title="Video call"
+                                            >
+                                                <Video className="w-4 h-4 md:w-5 md:h-5" />
+                                            </button>
+                                        </>
+                                    )}
+                                    <button
+                                        onClick={() => selectedChat.type === 'group' ? setShowGroupDetail(true) : setShowProfilePanel(true)}
+                                        className="p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"
+                                        aria-label="More options"
+                                        title="More options"
+                                    >
+                                        <MoreVertical className="w-4 h-4 md:w-5 md:h-5" />
+                                    </button>
+                                </div>
+                            </header>
+
+                            {/* Messages */}
+                            <div
+                                ref={scrollRef}
+                                className="flex-1 overflow-y-auto p-4 md:p-8 pt-6 md:pt-8 space-y-4 md:space-y-6 scroll-hide relative bg-transparent"
+                            >
+                                {messages.filter(m => {
+                                    const searchText = (m.text as string || "").toLowerCase();
+                                    const matchesSearch = searchText.includes(chatSearchQuery.toLowerCase());
+                                    const isMedia = m.type === 'voice' || m.type === 'file' || m.gif_url;
+                                    const isLink = searchText.includes("http");
+
+                                    if (searchFilters.media && !isMedia) return false;
+                                    if (searchFilters.links && !isLink) return false;
+                                    return matchesSearch;
+                                }).map((msg, i) => (
+                                    <MessageBubble
+                                        key={msg.$id || i}
+                                        msg={msg}
+                                        isOwn={msg.sender_id === user?.$id}
+                                        onReply={() => setReplyTo(msg)}
+                                        onEdit={() => {
+                                            setEditingMessage(msg);
+                                            setNewMessage(msg.text);
+                                        }}
+                                        onDelete={(everyone) => handleDeleteMessage(msg.$id, everyone)}
+                                        onForward={() => handleForwardMessage(msg)}
+                                        onAddReaction={(emoji) => handleAddReaction(msg.$id, emoji)}
+                                        reactions={reactions[msg.$id]}
+                                        status={messageMetadata[msg.$id]?.status || 'sent'}
+                                        renderText={renderMessageText}
+                                    />
+                                ))}
+                            </div>
+
+                            {/* Input Area */}
+                            <footer className="p-4 md:p-8 glass-footer relative z-20">
+                                <div className="max-w-5xl mx-auto relative">
+                                    <AnimatePresence>
+                                        {editingMessage && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: 10 }}
+                                                className="mb-4 p-3 bg-blue-900/30 rounded-2xl border-l-4 border-blue-500 backdrop-blur-xl"
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex-1">
+                                                        <p className="text-[10px] font-black text-blue-400 mb-1 uppercase tracking-widest">Editing Message</p>
+                                                        <p className="text-sm text-slate-200 truncate">{editingMessage.text}</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => { setEditingMessage(null); setNewMessage(""); }}
+                                                        className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg"
+                                                        aria-label="Cancel editing"
+                                                        title="Cancel editing"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                        {replyTo && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: 10 }}
+                                                className="mb-4 p-3 bg-slate-800/50 rounded-2xl border-l-4 border-emerald-500 backdrop-blur-xl"
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex-1">
+                                                        <p className="text-[10px] font-black text-emerald-400 mb-1 uppercase tracking-widest">Replying to {replyTo.sender_name || selectedChat.username}</p>
+                                                        <p className="text-sm text-slate-200 truncate">{replyTo.text || 'Voice/Media'}</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setReplyTo(null)}
+                                                        className="p-2 bg-[#1a2332] hover:bg-[#252f44] rounded-xl transition-colors text-white shadow-lg"
+                                                        aria-label="Cancel reply"
+                                                        title="Cancel reply"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                        {showGiphy && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                                                className="absolute bottom-full left-1/2 -translate-x-1/2 md:left-0 md:translate-x-0 mb-4 md:mb-6 z-50 overflow-visible"
+                                            >
+                                                <GiphyPicker onSelect={(gif) => handleSendMessage(undefined, gif.images.fixed_height.url)} onClose={() => setShowGiphy(false)} />
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+
+                                    <div className="flex items-end gap-2 md:gap-4 bg-white/3 border border-white/10 rounded-4xl md:rounded-[3rem] p-2 md:p-3 pr-3 md:pr-5 focus-within:border-primary-500/50 focus-within:bg-white/5 transition-all shadow-3xl backdrop-blur-2xl">
+                                        <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
+                                            <input
+                                                type="file"
+                                                ref={fileInputRef}
+                                                className="hidden"
+                                                aria-label="Upload file"
+                                                title="Upload file"
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) handleMediaUpload(file, 'file');
+                                                    e.currentTarget.value = '';
+                                                }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => fileInputRef.current?.click()}
+                                                disabled={isVoiceUploading}
+                                                className={`p-3 md:p-4 hover:bg-white/10 rounded-full transition-colors text-slate-500 hover:text-white ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                aria-label="Attach file"
+                                                title="Attach file"
+                                            >
+                                                <Paperclip className="w-5 h-5 md:w-6 md:h-6" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowGiphy(!showGiphy)}
+                                                disabled={isVoiceUploading}
+                                                className={`p-3 md:p-4 rounded-full transition-colors ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''} ${showGiphy ? 'bg-primary-600 text-white' : 'hover:bg-white/10 text-slate-500 hover:text-white'}`}
+                                                aria-label="Choose emoji or GIF"
+                                                title="Choose emoji or GIF"
+                                            ><Smile className="w-5 h-5 md:w-6 md:h-6" /></button>
+                                        </div>
+
                                         <textarea
                                             rows={1}
                                             value={newMessage}
@@ -2345,149 +2345,148 @@ export const Dashboard: React.FC = () => {
                                             title="Type a message"
                                             className="flex-1 min-w-0 bg-transparent border-none py-3 md:py-4 px-1 md:px-2 text-sm md:text-base focus:ring-0 resize-none max-h-40 scrollbar-hide text-slate-800 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400"
                                         />
-                                    
-                                    <div className="flex items-center gap-1 md:gap-2 pb-1 md:pb-1.5 shrink-0">
 
-                                        {/* While recording: show a live duration + cancel */}
-                                        {isRecording && (
-                                            <>
-                                                <span className="text-red-500 text-xs font-bold animate-pulse px-2">
-                                                    {String(Math.floor(recordingDuration / 60)).padStart(2,'0')}:{String(recordingDuration % 60).padStart(2,'0')}
-                                                </span>
-                                                <button
-                                                    type="button"
-                                                    onClick={cancelRecording}
-                                                    title="Cancel recording"
-                                                    className="p-2 md:p-3 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 transition-colors text-xs font-bold"
-                                                >
-                                                    ✕
-                                                </button>
-                                            </>
-                                        )}
+                                        <div className="flex items-center gap-1 md:gap-2 pb-1 md:pb-1.5 shrink-0">
 
-                                        {/* Mic toggle button */}
-                                        <button
-                                            type="button"
-                                            onClick={toggleRecording}
-                                            disabled={isVoiceUploading}
-                                            aria-label={isRecording ? 'Stop and send voice note' : 'Start voice note'}
-                                            title={isRecording ? 'Stop & send voice note' : 'Start voice note'}
-                                            className={`p-3 md:p-4 rounded-full transition-all ${
-                                                isRecording
-                                                    ? 'bg-red-500 scale-110 animate-pulse text-white shadow-lg shadow-red-500/40'
-                                                    : 'hover:bg-white/10 text-slate-500 hover:text-white'
-                                            } ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        >
-                                            <Mic className="w-5 h-5 md:w-6 md:h-6" />
-                                        </button>
+                                            {/* While recording: show a live duration + cancel */}
+                                            {isRecording && (
+                                                <>
+                                                    <span className="text-red-500 text-xs font-bold animate-pulse px-2">
+                                                        {String(Math.floor(recordingDuration / 60)).padStart(2, '0')}:{String(recordingDuration % 60).padStart(2, '0')}
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={cancelRecording}
+                                                        title="Cancel recording"
+                                                        className="p-2 md:p-3 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-600 transition-colors text-xs font-bold"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </>
+                                            )}
 
-                                        {/* Send text button — hidden while recording */}
-                                        {!isRecording && (
+                                            {/* Mic toggle button */}
                                             <button
                                                 type="button"
-                                                onClick={() => handleSendMessage()}
-                                                disabled={isVoiceUploading || (!newMessage.trim() && !newMessage)}
-                                                aria-label="Send message"
-                                                title="Send message"
-                                                className={`p-3 md:p-4 bg-linear-to-br from-primary-600 to-indigo-700 hover:from-primary-500 hover:to-indigo-600 text-white rounded-full transition-all shadow-xl shadow-primary-500/30 active:scale-95 ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                onClick={toggleRecording}
+                                                disabled={isVoiceUploading}
+                                                aria-label={isRecording ? 'Stop and send voice note' : 'Start voice note'}
+                                                title={isRecording ? 'Stop & send voice note' : 'Start voice note'}
+                                                className={`p-3 md:p-4 rounded-full transition-all ${isRecording
+                                                    ? 'bg-red-500 scale-110 animate-pulse text-white shadow-lg shadow-red-500/40'
+                                                    : 'hover:bg-white/10 text-slate-500 hover:text-white'
+                                                    } ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                                             >
-                                                {isVoiceUploading ? <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" /> : <Send className="w-5 h-5 md:w-6 md:h-6" />}
+                                                <Mic className="w-5 h-5 md:w-6 md:h-6" />
                                             </button>
+
+                                            {/* Send text button — hidden while recording */}
+                                            {!isRecording && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleSendMessage()}
+                                                    disabled={isVoiceUploading || (!newMessage.trim() && !newMessage)}
+                                                    aria-label="Send message"
+                                                    title="Send message"
+                                                    className={`p-3 md:p-4 bg-linear-to-br from-primary-600 to-indigo-700 hover:from-primary-500 hover:to-indigo-600 text-white rounded-full transition-all shadow-xl shadow-primary-500/30 active:scale-95 ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                >
+                                                    {isVoiceUploading ? <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" /> : <Send className="w-5 h-5 md:w-6 md:h-6" />}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </footer>
+                        </>
+                    ) : (
+                        <>
+                            {/* Mobile Header */}
+                            <header className="md:hidden h-16 border-b border-slate-200 flex items-center justify-between px-4 bg-white z-10 transition-all">
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={() => setIsMobileSidebarOpen(true)}
+                                        className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                                        aria-label="Open sidebar"
+                                        title="Open sidebar"
+                                    >
+                                        <Menu className="w-5 h-5 text-slate-600" />
+                                    </button>
+                                    <h1 className="text-lg font-black text-[#FFF9E3] tracking-tighter uppercase">SecureVault</h1>
+                                </div>
+
+                                <div className="flex items-center gap-1">
+
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setShowTopMenu(!showTopMenu)}
+                                            className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-600"
+                                            aria-label="Menu"
+                                            title="Menu"
+                                        >
+                                            <MoreVertical className="w-5 h-5" />
+                                        </button>
+                                        {showTopMenu && (
+                                            <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2 z-50 overflow-hidden ring-1 ring-black/5">
+                                                <button onClick={() => { setShowFindUsers(true); setShowTopMenu(false); }} className="w-full text-left px-4 py-2 text-sm hover:bg-primary-50 transition-colors flex items-center gap-3 font-medium text-slate-700">
+                                                    <UsersIcon className="w-4 h-4 text-primary-500" />
+                                                    Add Contact
+                                                </button>
+                                                <button onClick={() => { setShowCreateGroup(true); setShowTopMenu(false); }} className="w-full text-left px-4 py-2 text-sm hover:bg-primary-50 transition-colors flex items-center gap-3 font-medium text-slate-700">
+                                                    <UsersIcon className="w-4 h-4 text-primary-500" />
+                                                    New Group
+                                                </button>
+                                                <div className="h-px bg-slate-100 my-1 mx-2" />
+                                                <button onClick={() => { setShowProfile(true); setShowTopMenu(false); }} className="w-full text-left px-4 py-2 text-sm hover:bg-primary-50 transition-colors flex items-center gap-3 font-medium text-slate-700">
+                                                    <Settings className="w-4 h-4 text-slate-400" />
+                                                    Settings
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
-                            </div>
-                        </footer>
-                    </>
-                ) : (
-                    <>
-                        {/* Mobile Header */}
-                        <header className="md:hidden h-16 border-b border-slate-200 flex items-center justify-between px-4 bg-white z-10 transition-all">
-                            <div className="flex items-center gap-3">
-                                <button 
-                                    onClick={() => setIsMobileSidebarOpen(true)} 
-                                    className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
-                                    aria-label="Open sidebar"
-                                    title="Open sidebar"
+                            </header>
+                            <div className="flex-1 flex flex-col items-center justify-center text-center p-12 bg-slate-50 relative">
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="relative z-10 max-w-2xl"
                                 >
-                                    <Menu className="w-5 h-5 text-slate-600" />
-                                </button>
-                                <h1 className="text-lg font-black text-[#FFF9E3] tracking-tighter uppercase">SecureVault</h1>
-                            </div>
-                            
-                            <div className="flex items-center gap-1">
+                                    <div className="w-20 h-20 bg-blue-500 rounded-3xl flex items-center justify-center mb-10 mx-auto shadow-lg">
+                                        <ShieldCheck className="w-10 h-10 text-white" />
+                                    </div>
+                                    <h2 className="text-4xl font-bold tracking-tight mb-4 text-slate-800">Welcome to SecureVault</h2>
+                                    <p className="text-slate-600 leading-relaxed text-lg">Your messages are protected with Quantum-Resistant E2EE.</p>
 
-                                <div className="relative">
-                                    <button 
-                                        onClick={() => setShowTopMenu(!showTopMenu)} 
-                                        className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-600"
-                                        aria-label="Menu"
-                                        title="Menu"
-                                    >
-                                        <MoreVertical className="w-5 h-5" />
-                                    </button>
-                                    {showTopMenu && (
-                                        <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-slate-200 py-2 z-50 overflow-hidden ring-1 ring-black/5">
-                                            <button onClick={() => { setShowFindUsers(true); setShowTopMenu(false); }} className="w-full text-left px-4 py-2 text-sm hover:bg-primary-50 transition-colors flex items-center gap-3 font-medium text-slate-700">
-                                                <UsersIcon className="w-4 h-4 text-primary-500" />
-                                                Add Contact
+                                    <div className="mt-12 grid grid-cols-3 gap-6 w-full max-w-2xl">
+                                        {[
+                                            { icon: <MessageCircle />, label: 'Chats', action: () => openFirstChat('user') },
+                                            { icon: <UsersIcon />, label: 'Groups', action: () => openFirstChat('group') },
+                                            { icon: <ShieldAlert />, label: 'Secure', action: () => setShowUnlockModal(true) }
+                                        ].map((item, i) => (
+                                            <button
+                                                key={i}
+                                                onClick={item.action}
+                                                className="p-6 bg-white rounded-2xl border border-slate-200 flex flex-col items-center gap-3 shadow-sm hover:shadow-md hover:border-blue-500 transition-all group"
+                                            >
+                                                <div className="w-10 h-10 text-blue-500 group-hover:scale-110 transition-transform">{item.icon}</div>
+                                                <span className="text-xs font-medium text-slate-700">{item.label}</span>
                                             </button>
-                                            <button onClick={() => { setShowCreateGroup(true); setShowTopMenu(false); }} className="w-full text-left px-4 py-2 text-sm hover:bg-primary-50 transition-colors flex items-center gap-3 font-medium text-slate-700">
-                                                <UsersIcon className="w-4 h-4 text-primary-500" />
-                                                New Group
-                                            </button>
-                                            <div className="h-px bg-slate-100 my-1 mx-2" />
-                                            <button onClick={() => { setShowProfile(true); setShowTopMenu(false); }} className="w-full text-left px-4 py-2 text-sm hover:bg-primary-50 transition-colors flex items-center gap-3 font-medium text-slate-700">
-                                                <Settings className="w-4 h-4 text-slate-400" />
-                                                Settings
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
+                                        ))}
+                                    </div>
+                                </motion.div>
                             </div>
-                        </header>
-                        <div className="flex-1 flex flex-col items-center justify-center text-center p-12 bg-slate-50 relative">
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                className="relative z-10 max-w-2xl"
-                            >
-                                <div className="w-20 h-20 bg-blue-500 rounded-3xl flex items-center justify-center mb-10 mx-auto shadow-lg">
-                                    <ShieldCheck className="w-10 h-10 text-white" />
-                                </div>
-                                <h2 className="text-4xl font-bold tracking-tight mb-4 text-slate-800">Welcome to SecureVault</h2>
-                                <p className="text-slate-600 leading-relaxed text-lg">Your messages are protected with Quantum-Resistant E2EE.</p>
-
-                                <div className="mt-12 grid grid-cols-3 gap-6 w-full max-w-2xl">
-                                    {[
-                                        { icon: <MessageCircle />, label: 'Chats', action: () => openFirstChat('user') },
-                                        { icon: <UsersIcon />, label: 'Groups', action: () => openFirstChat('group') },
-                                        { icon: <ShieldAlert />, label: 'Secure', action: () => setShowUnlockModal(true) }
-                                    ].map((item, i) => (
-                                        <button 
-                                            key={i} 
-                                            onClick={item.action}
-                                            className="p-6 bg-white rounded-2xl border border-slate-200 flex flex-col items-center gap-3 shadow-sm hover:shadow-md hover:border-blue-500 transition-all group"
-                                        >
-                                            <div className="w-10 h-10 text-blue-500 group-hover:scale-110 transition-transform">{item.icon}</div>
-                                            <span className="text-xs font-medium text-slate-700">{item.label}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </motion.div>
-                        </div>
-                    </>
-                )}
+                        </>
+                    )}
                 </div>
 
-                
-                
+
+
 
             </main>
-            <PinInput 
-                isOpen={showUnlockModal} 
-                onComplete={handleUnlock} 
-                onSetup={setupNewVault} 
+            <PinInput
+                isOpen={showUnlockModal}
+                onComplete={handleUnlock}
+                onSetup={setupNewVault}
                 onSuccess={(result) => {
                     if (typeof result === 'string' && result) {
                         setNewRecoveryKey(result);
@@ -2499,7 +2498,7 @@ export const Dashboard: React.FC = () => {
                     setIsRecovering(true);
                 }}
             />
-            
+
             <AnimatePresence>
                 {newRecoveryKey && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
@@ -2511,7 +2510,7 @@ export const Dashboard: React.FC = () => {
                             <div className="bg-gray-100 p-4 rounded-xl text-center border border-gray-200">
                                 <code className="text-xl font-mono font-bold text-gray-900">{newRecoveryKey}</code>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => setNewRecoveryKey(null)}
                                 className="w-full h-12 bg-blue-500 hover:bg-blue-600 text-white font-black uppercase tracking-widest rounded-xl transition-all"
                             >
@@ -2528,12 +2527,12 @@ export const Dashboard: React.FC = () => {
                                 <h2 className="text-2xl font-black uppercase text-gray-900">Recover Vault</h2>
                                 <p className="text-xs text-gray-500 font-bold tracking-wider uppercase">Enter your Recovery Key and a new PIN</p>
                             </div>
-                            
+
                             <div className="space-y-4">
                                 <div>
                                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">Recovery Key</label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
                                         value={recoveryKeyInput}
                                         onChange={(e) => setRecoveryKeyInput(e.target.value.toUpperCase())}
@@ -2542,8 +2541,8 @@ export const Dashboard: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-black uppercase tracking-widest text-gray-500">New 6-Digit PIN</label>
-                                    <input 
-                                        type="password" 
+                                    <input
+                                        type="password"
                                         maxLength={6}
                                         placeholder="••••••"
                                         value={recoveryPin}
@@ -2554,7 +2553,7 @@ export const Dashboard: React.FC = () => {
                             </div>
 
                             <div className="flex gap-4 pt-4">
-                                <button 
+                                <button
                                     onClick={() => {
                                         setIsRecovering(false);
                                         setShowUnlockModal(true);
@@ -2565,7 +2564,7 @@ export const Dashboard: React.FC = () => {
                                 >
                                     Cancel
                                 </button>
-                                <button 
+                                <button
                                     onClick={async () => {
                                         if (recoveryKeyInput.length < 24) return alert("Invalid Recovery Key length.");
                                         if (recoveryPin.length !== 6) return alert("PIN must be 6 digits.");
@@ -2588,53 +2587,53 @@ export const Dashboard: React.FC = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
-            
+
             {/* New Group Modals */}
             {selectedChat?.type === 'group' && (
                 <>
-                    <GroupDetailView 
-                        isOpen={showGroupDetail} 
-                        onClose={() => setShowGroupDetail(false)} 
-                        group={selectedChat} 
-                        onUpdate={fetchMyGroups} 
+                    <GroupDetailView
+                        isOpen={showGroupDetail}
+                        onClose={() => setShowGroupDetail(false)}
+                        group={selectedChat}
+                        onUpdate={fetchMyGroups}
                     />
-                    <AddMemberModal 
-                        isOpen={showAddMember} 
-                        onClose={() => setShowAddMember(false)} 
-                        group={selectedChat} 
+                    <AddMemberModal
+                        isOpen={showAddMember}
+                        onClose={() => setShowAddMember(false)}
+                        group={selectedChat}
                         onAdded={fetchMyGroups}
                         onRequestKeySync={requestGroupKeySync}
                     />
                 </>
             )}
-            <ReportModal 
-                isOpen={showReport} 
-                onClose={() => setShowReport(false)} 
-                targetId={selectedChat?.user_id || selectedChat?.$id} 
-                targetName={selectedChat?.username || selectedChat?.name} 
-                type={selectedChat?.type === 'group' ? 'group' : 'user'} 
+            <ReportModal
+                isOpen={showReport}
+                onClose={() => setShowReport(false)}
+                targetId={selectedChat?.user_id || selectedChat?.$id}
+                targetName={selectedChat?.username || selectedChat?.name}
+                type={selectedChat?.type === 'group' ? 'group' : 'user'}
             />
 
-            <StatusViewer 
-                isOpen={showStatusViewer} 
-                onClose={() => setShowStatusViewer(false)} 
-                statuses={selectedStatuses} 
-                initialIndex={statusIndex} 
-                user={user} 
-                onViewed={handleStatusViewed} 
+            <StatusViewer
+                isOpen={showStatusViewer}
+                onClose={() => setShowStatusViewer(false)}
+                statuses={selectedStatuses}
+                initialIndex={statusIndex}
+                user={user}
+                onViewed={handleStatusViewed}
                 onDeleted={() => setRefreshStatusTrigger(prev => prev + 1)}
             />
 
-            <AddStatusWizard 
-                isOpen={showAddStatus} 
-                onClose={() => setShowAddStatus(false)} 
+            <AddStatusWizard
+                isOpen={showAddStatus}
+                onClose={() => setShowAddStatus(false)}
                 onSuccess={() => {
-                    setSidebarTab('updates'); 
+                    setSidebarTab('updates');
                     setRefreshStatusTrigger(prev => prev + 1);
-                }} 
+                }}
             />
 
-            <ProfileSidePanel 
+            <ProfileSidePanel
                 isOpen={showProfilePanel}
                 onClose={() => setShowProfilePanel(false)}
                 item={selectedChat}
@@ -2657,12 +2656,12 @@ export const Dashboard: React.FC = () => {
                 }}
                 currentUser={user}
             />
-            
+
             {/* Ambient Background */}
             <div className="fixed top-0 right-0 w-[500px] h-[500px] bg-primary-500/10 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
             <div className="fixed bottom-0 left-0 w-[500px] h-[500px] bg-indigo-500/10 blur-[120px] rounded-full translate-y-1/2 -translate-x-1/2 pointer-events-none" />
-            {/* Security Insights Dashboard */}
-            <SecurityDashboard messages={messages} />
+            {/* Security Insights / Security Stream */}
+            <SecurityInsights messages={messages} />
         </div>
     );
 };
