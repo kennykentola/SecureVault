@@ -1,0 +1,99 @@
+CHAPTER FOUR
+RESULTS, IMPLEMENTATION, AND SECURITY ANALYSIS
+
+4.1 System Implementation
+The primary objective of this project was to design and implement a secure end-to-end encrypted instant messaging system using hybrid cryptography. The implementation was completed in accordance with the architectural design presented in Chapter Three. The resulting prototype supports secure one-to-one communication, where messages are encrypted before transmission and decrypted only by the intended recipient.
+
+The system was developed as a web-based instant messaging platform with a simple and interactive interface. The implementation emphasizes confidentiality, integrity, and secure key exchange, while ensuring that sensitive cryptographic operations occur on the client side. This design prevents the relay server from accessing plaintext messages or private keys.
+
+The hybrid cryptographic workflow used in the system combines the following mechanisms:
+1. AES-256-CBC for encrypting message content.
+2. RSA-2048 for protecting the symmetric session key during exchange.
+3. SHA-256 for detecting tampering and confirming message integrity.
+
+Key functionalities include:
+1. Message Composition and Encryption: Users can write messages through the browser interface. Each message is encrypted locally before leaving the sender's device.
+2. Secure Key Exchange: The session key used for message encryption is wrapped with the recipient's RSA public key, allowing only the intended recipient to recover it.
+3. Integrity Verification: A SHA-256 digest is generated for each message so that any modification during transmission can be detected.
+4. Local Decryption: The recipient uses their private key to recover the session key and decrypt the message locally.
+5. Client-Side Protection: Encryption and decryption are performed on the users' devices, reducing the exposure of sensitive data to intermediaries.
+
+Implementation Challenges and Resolutions:
+1. Key Handling: One challenge was ensuring that private keys remained unavailable to the server. This was addressed by keeping private keys on the client side and using public-key exchange for communication.
+2. Real-Time Processing: Since the system is intended for instant messaging, encryption and transmission had to remain fast enough for interactive use. This was managed by using AES for message payloads and reserving RSA for key exchange only.
+3. Integrity Checking: Another challenge was providing a clear method for detecting message alteration. This was resolved through the use of SHA-256 hashing and digest comparison at the receiver side.
+4. Session Reliability: The system was designed to operate within a live session memory model so that messages exist only for the duration of the chat and are discarded after the session ends.
+
+4.1.1 User Interface
+The user interface was designed to make secure communication straightforward for the user while still exposing the internal cryptographic flow for academic understanding. The interface presents the conversation area, encryption details, and integrity indicators in a visually clear format.
+
+Figure 4.1.1: Registration or login page
+Figure 4.1.2: Main messaging interface
+Figure 4.1.3: Secure message composition area
+Figure 4.1.4: Encryption and hash display panel
+Figure 4.1.5: Message verification and delivery section
+
+4.2 Performance Evaluation
+Performance evaluation was conducted to determine whether the system could support secure messaging without introducing excessive delay. Since the platform is designed for one-to-one instant communication, the main concern was to maintain an acceptable balance between cryptographic strength and responsiveness.
+
+The system was examined by observing the time required to encrypt, transmit, decrypt, and verify messages of different lengths. The evaluation showed that symmetric encryption with AES-256-CBC handled message payloads efficiently, while RSA-2048 remained suitable for protecting the session key because it was not applied to the entire message body.
+
+Observations:
+1. Short text messages were processed with minimal delay.
+2. Larger messages required more time, but the increase remained acceptable for normal chat usage.
+3. SHA-256 hashing added only a small processing overhead.
+4. RSA-2048 operations were slower than AES operations, but this did not affect usability because RSA was used only for key exchange.
+5. The overall system remained responsive enough for secure real-time messaging.
+
+General Performance Findings:
+1. The system is appropriate for academic demonstration and small-scale secure communication.
+2. The hybrid cryptographic model improved efficiency by assigning each algorithm to the task it handles best.
+3. Client-side processing reduced server workload and helped preserve message privacy.
+4. The no-database design lowered storage overhead and eliminated persistent plaintext storage.
+
+4.3 Security Analysis
+The security of the system was evaluated in terms of confidentiality, integrity, and key protection. The results show that the architecture provides a strong foundation for secure communication when implemented correctly.
+
+Confidentiality
+1. Messages are encrypted before leaving the sender's device.
+2. The relay server only forwards ciphertext and cannot interpret the content.
+3. Plaintext remains hidden from intermediaries throughout the communication process.
+
+Key Exchange Security
+1. The AES session key is encrypted with the recipient's RSA public key.
+2. Only the matching private key can recover the session key.
+3. This approach prevents unauthorized parties from accessing the key material used for message decryption.
+
+Integrity Protection
+1. SHA-256 is used to generate a message digest before transmission.
+2. The receiver recomputes the digest after decryption.
+3. A mismatch between the two values indicates that the message may have been altered.
+
+Trust and Privacy Considerations
+1. The server is treated as untrusted and is restricted to routing encrypted packets only.
+2. Private keys remain on the client side and are not shared over the network.
+3. The design reduces the risk of plaintext exposure during transit.
+
+Potential Vulnerabilities
+1. Public Key Verification: If public keys are not verified properly, a malicious actor could attempt impersonation.
+2. Client Device Security: The security of the system depends partly on the safety of the user's device and browser environment.
+3. Metadata Exposure: Although message content is protected, communication metadata such as timing and sender identity may still be visible to the relay layer.
+4. Session Dependence: Because the system uses session-based storage, data may be lost after disconnection, which is a deliberate design choice but may limit recovery options.
+
+4.4 Limitations of the System
+Although the system successfully fulfills its intended purpose, it has some limitations that should be noted.
+
+1. The prototype is limited to one-to-one communication and does not support group chats.
+2. The system does not provide full metadata protection.
+3. Forward secrecy is not fully implemented in the current design.
+4. The application is intended for controlled academic use rather than large-scale deployment.
+5. The system does not include long-term message archival because it is designed to discard session data after use.
+
+4.5 Conclusions
+This project successfully delivered a secure end-to-end encrypted instant messaging prototype using hybrid cryptography. The system combines AES-256-CBC, RSA-2048, and SHA-256 to protect message confidentiality and detect tampering during transmission.
+
+The implementation demonstrates that secure instant messaging can be achieved without exposing plaintext data to the server. By performing encryption and decryption on the client side, the system preserves user privacy and keeps control of the cryptographic process at the endpoints.
+
+The study also shows that the hybrid approach is practical because it uses symmetric encryption for fast message processing and asymmetric encryption for secure key exchange. Integrity verification through hashing further strengthens the design by allowing the receiver to identify altered messages.
+
+In summary, the project meets its objectives and provides a useful academic model for understanding how hybrid cryptography can be applied in secure instant messaging systems.

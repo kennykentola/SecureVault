@@ -169,7 +169,7 @@ export const SecurityInsights: React.FC<SecurityInsightsProps> = ({ messages }) 
     const activeArch = archDetails[selectedArch];
 
     return (
-        <div className="fixed bottom-28 md:bottom-6 right-6 z-[100]">
+        <div className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-[100]">
             <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -186,7 +186,7 @@ export const SecurityInsights: React.FC<SecurityInsightsProps> = ({ messages }) 
                         initial={{ opacity: 0, scale: 0.9, y: 20, x: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: 20, x: 20 }}
-                        className="absolute bottom-full right-0 mb-4 w-[calc(100vw-2rem)] md:w-[480px] bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden backdrop-blur-xl"
+                        className="absolute bottom-full right-0 mb-1 translate-y-4 md:translate-y-2 w-[calc(100vw-1rem)] md:w-[640px] lg:w-[760px] xl:w-[860px] max-w-[calc(100vw-1rem)] max-h-[calc(100vh-7rem)] md:max-h-none bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden backdrop-blur-xl"
                     >
                         {/* ── Header ── */}
                         <div className="p-4 border-b border-slate-800 bg-slate-800/50 flex justify-between items-center">

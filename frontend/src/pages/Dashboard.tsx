@@ -1975,15 +1975,17 @@ export const Dashboard: React.FC = () => {
                 <div className="flex-1 overflow-y-auto px-4 space-y-1 pb-8 custom-scrollbar">
                     {sidebarTab === 'chats' && (
                         <>
-                            <button
-                                onClick={() => setShowCreateGroup(true)}
-                                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-blue-50 text-blue-600 transition-all mb-2 border border-blue-100/50"
-                            >
-                                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                                    <Plus className="w-5 h-5" />
-                                </div>
-                                <span className="text-sm font-semibold">Create New Group</span>
-                            </button>
+                            {false && (
+                                <button
+                                    onClick={() => setShowCreateGroup(true)}
+                                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-blue-50 text-blue-600 transition-all mb-2 border border-blue-100/50"
+                                >
+                                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                                        <Plus className="w-5 h-5" />
+                                    </div>
+                                    <span className="text-sm font-semibold">Create New Group</span>
+                                </button>
+                            )}
 
                             {sortedGroups.map(g => (
                                 <SidebarChatItem
