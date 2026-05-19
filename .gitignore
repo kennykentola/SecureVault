@@ -21,6 +21,10 @@ DEPLOYMENT_INFO.md
 dist/
 build/
 
+# Draft writing workspace
+scratch/chapter_four.txt
+scratch/chapter_five.txt
+
 # Logs
 *.log
 npm-debug.log*
