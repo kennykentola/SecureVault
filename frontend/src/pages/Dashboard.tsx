@@ -2131,80 +2131,82 @@ export const Dashboard: React.FC = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-1 md:gap-3">
-                                    <div className={`flex items-center bg-slate-100 rounded-2xl px-3 py-1 transition-all ${showSearch ? 'w-32 sm:w-48 opacity-100' : 'w-0 opacity-0 overflow-hidden'}`}>
-                                        <Search className="w-4 h-4 text-slate-400 shrink-0" />
-                                        <input
-                                            className="bg-transparent border-none outline-none text-xs text-slate-700 w-full ml-2"
-                                            placeholder="Search chat..."
-                                            value={chatSearchQuery}
-                                            onChange={(e) => setChatSearchQuery(e.target.value)}
-                                        />
-                                    </div>
-
-                                    <button
-                                        onClick={() => setShowSearch(!showSearch)}
-                                        className={`p-2.5 md:p-3 rounded-2xl transition-all ${showSearch ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'}`}
-                                        aria-label="Toggle search"
-                                        title="Toggle search"
-                                    >
-                                        <Search className="w-5 h-5" />
-                                    </button>
-                                    {showSearch && (
-                                        <div className="flex gap-2 mr-2">
-                                            <button
-                                                onClick={() => setSearchFilters(prev => ({ ...prev, media: !prev.media }))}
-                                                className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${searchFilters.media ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}
-                                            >
-                                                Media
-                                            </button>
-                                            <button
-                                                onClick={() => setSearchFilters(prev => ({ ...prev, links: !prev.links }))}
-                                                className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${searchFilters.links ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}
-                                            >
-                                                Links
-                                            </button>
+                                {false && (
+                                    <div className="flex items-center gap-1 md:gap-3">
+                                        <div className={`flex items-center bg-slate-100 rounded-2xl px-3 py-1 transition-all ${showSearch ? 'w-32 sm:w-48 opacity-100' : 'w-0 opacity-0 overflow-hidden'}`}>
+                                            <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                                            <input
+                                                className="bg-transparent border-none outline-none text-xs text-slate-700 w-full ml-2"
+                                                placeholder="Search chat..."
+                                                value={chatSearchQuery}
+                                                onChange={(e) => setChatSearchQuery(e.target.value)}
+                                            />
                                         </div>
-                                    )}
-                                    {selectedChat.type === 'group' && (
+
                                         <button
-                                            onClick={() => setShowAddMember(true)}
-                                            className="p-2.5 md:p-3 bg-indigo-50 hover:bg-indigo-100 rounded-2xl transition-all text-indigo-600"
-                                            aria-label="Add member"
-                                            title="Add member"
+                                            onClick={() => setShowSearch(!showSearch)}
+                                            className={`p-2.5 md:p-3 rounded-2xl transition-all ${showSearch ? 'text-indigo-600 bg-indigo-50' : 'text-slate-600 bg-slate-100 hover:bg-slate-200'}`}
+                                            aria-label="Toggle search"
+                                            title="Toggle search"
                                         >
-                                            <Plus className="w-5 h-5" />
+                                            <Search className="w-5 h-5" />
                                         </button>
-                                    )}
-                                    {selectedChat.type !== 'group' && (
-                                        <>
+                                        {showSearch && (
+                                            <div className="flex gap-2 mr-2">
+                                                <button
+                                                    onClick={() => setSearchFilters(prev => ({ ...prev, media: !prev.media }))}
+                                                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${searchFilters.media ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}
+                                                >
+                                                    Media
+                                                </button>
+                                                <button
+                                                    onClick={() => setSearchFilters(prev => ({ ...prev, links: !prev.links }))}
+                                                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${searchFilters.links ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}
+                                                >
+                                                    Links
+                                                </button>
+                                            </div>
+                                        )}
+                                        {selectedChat.type === 'group' && (
                                             <button
-                                                onClick={() => handleStartCall('voice')}
-                                                className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"
-                                                aria-label="Voice call"
-                                                title="Voice call"
+                                                onClick={() => setShowAddMember(true)}
+                                                className="p-2.5 md:p-3 bg-indigo-50 hover:bg-indigo-100 rounded-2xl transition-all text-indigo-600"
+                                                aria-label="Add member"
+                                                title="Add member"
                                             >
-                                                <Phone className="w-4 h-4 md:w-5 md:h-5" />
+                                                <Plus className="w-5 h-5" />
                                             </button>
-                                            <button
-                                                onClick={() => handleStartCall('video')}
-                                                className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"
-                                                aria-label="Video call"
-                                                title="Video call"
-                                            >
-                                                <Video className="w-4 h-4 md:w-5 md:h-5" />
-                                            </button>
-                                        </>
-                                    )}
-                                    <button
-                                        onClick={() => selectedChat.type === 'group' ? setShowGroupDetail(true) : setShowProfilePanel(true)}
-                                        className="p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"
-                                        aria-label="More options"
-                                        title="More options"
-                                    >
-                                        <MoreVertical className="w-4 h-4 md:w-5 md:h-5" />
-                                    </button>
-                                </div>
+                                        )}
+                                        {selectedChat.type !== 'group' && (
+                                            <>
+                                                <button
+                                                    onClick={() => handleStartCall('voice')}
+                                                    className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"
+                                                    aria-label="Voice call"
+                                                    title="Voice call"
+                                                >
+                                                    <Phone className="w-4 h-4 md:w-5 md:h-5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleStartCall('video')}
+                                                    className="flex p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"
+                                                    aria-label="Video call"
+                                                    title="Video call"
+                                                >
+                                                    <Video className="w-4 h-4 md:w-5 md:h-5" />
+                                                </button>
+                                            </>
+                                        )}
+                                        <button
+                                            onClick={() => selectedChat.type === 'group' ? setShowGroupDetail(true) : setShowProfilePanel(true)}
+                                            className="p-2 md:p-3 bg-slate-100 hover:bg-slate-200 rounded-2xl transition-all text-slate-600"
+                                            aria-label="More options"
+                                            title="More options"
+                                        >
+                                            <MoreVertical className="w-4 h-4 md:w-5 md:h-5" />
+                                        </button>
+                                    </div>
+                                )}
                             </header>
 
                             {/* Messages */}
@@ -2304,6 +2306,7 @@ export const Dashboard: React.FC = () => {
                                     </AnimatePresence>
 
                                     <div className="flex items-end gap-2 md:gap-4 bg-white/3 border border-white/10 rounded-4xl md:rounded-[3rem] p-2 md:p-3 pr-3 md:pr-5 focus-within:border-primary-500/50 focus-within:bg-white/5 transition-all shadow-3xl backdrop-blur-2xl">
+                                        {false && (
                                         <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
                                             <input
                                                 type="file"
@@ -2336,6 +2339,7 @@ export const Dashboard: React.FC = () => {
                                                 title="Choose emoji or GIF"
                                             ><Smile className="w-5 h-5 md:w-6 md:h-6" /></button>
                                         </div>
+                                        )}
 
                                         <textarea
                                             rows={1}
@@ -2367,20 +2371,24 @@ export const Dashboard: React.FC = () => {
                                                 </>
                                             )}
 
-                                            {/* Mic toggle button */}
-                                            <button
-                                                type="button"
-                                                onClick={toggleRecording}
-                                                disabled={isVoiceUploading}
-                                                aria-label={isRecording ? 'Stop and send voice note' : 'Start voice note'}
-                                                title={isRecording ? 'Stop & send voice note' : 'Start voice note'}
-                                                className={`p-3 md:p-4 rounded-full transition-all ${isRecording
-                                                    ? 'bg-red-500 scale-110 animate-pulse text-white shadow-lg shadow-red-500/40'
-                                                    : 'hover:bg-white/10 text-slate-500 hover:text-white'
-                                                    } ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                            >
-                                                <Mic className="w-5 h-5 md:w-6 md:h-6" />
-                                            </button>
+                                            {false && (
+                                                <>
+                                                    {/* Mic toggle button */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={toggleRecording}
+                                                        disabled={isVoiceUploading}
+                                                        aria-label={isRecording ? 'Stop and send voice note' : 'Start voice note'}
+                                                        title={isRecording ? 'Stop & send voice note' : 'Start voice note'}
+                                                        className={`p-3 md:p-4 rounded-full transition-all ${isRecording
+                                                            ? 'bg-red-500 scale-110 animate-pulse text-white shadow-lg shadow-red-500/40'
+                                                            : 'hover:bg-white/10 text-slate-500 hover:text-white'
+                                                            } ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    >
+                                                        <Mic className="w-5 h-5 md:w-6 md:h-6" />
+                                                    </button>
+                                                </>
+                                            )}
 
                                             {/* Send text button — hidden while recording */}
                                             {!isRecording && (
