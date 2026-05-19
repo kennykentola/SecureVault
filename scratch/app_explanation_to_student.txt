@@ -1,0 +1,79 @@
+SECURE END-TO-END ENCRYPTED INSTANT MESSAGING SYSTEM
+STUDENT EXPLANATION OF HOW THE APPLICATION WORKS
+
+This application is a secure instant messaging system designed to protect communication between users through end-to-end encryption. In simple terms, the app makes sure that messages are encrypted on the sender's device before they are sent and can only be decrypted by the intended receiver. This means that the server only handles encrypted data and cannot read the actual message content.
+
+The system was developed to demonstrate how hybrid cryptography can be used in a real messaging environment. It combines symmetric encryption, asymmetric encryption, and hashing to create a secure communication flow. The application also includes a user interface that makes the security process easier to understand by showing plaintext, ciphertext, hashes, and verification details inside a live security panel.
+
+1. Purpose of the Application
+The main purpose of the application is to allow users to send and receive messages securely without exposing sensitive information to unauthorized parties. It is designed for one-to-one chat and also supports group communication features in the full application environment. The system was built for privacy, confidentiality, and message integrity.
+
+2. How the Application Starts
+When a user opens the application, the first step is authentication. The user signs in through the login or registration process. After login, the application checks whether the user already has a local vault or encryption keys available. If the vault is not yet unlocked, the user is prompted to enter the PIN so that the private key can be accessed securely from the browser storage.
+
+This step is important because the private key is never exposed publicly. It remains protected on the local device and is only used when the user is authorized to access encrypted messages.
+
+3. Chat and Dashboard Layout
+After login, the user enters the dashboard. The dashboard is organized in a way that makes communication easy to follow. The sidebar displays chats, groups, updates, and call-related features. The central area displays the selected conversation, and the message composer is used to type and send new messages.
+
+The dashboard also provides extra features such as:
+1. Searching for chats and users.
+2. Viewing group conversations.
+3. Managing profile settings.
+4. Sending media, voice notes, and links.
+5. Monitoring message security through the security insights panel.
+
+4. How Messaging Works
+When a user sends a message, the application does not send plain text directly. Instead, the message goes through a cryptographic process:
+
+1. The message is first created in plain text on the sender's device.
+2. A random symmetric AES key is generated for encryption.
+3. The message content is encrypted with AES-256-CBC.
+4. The AES key is then encrypted with the recipient's RSA public key.
+5. A SHA-256 hash is generated to help verify message integrity.
+6. The encrypted message, encrypted key, initialization vector, and hash are sent to the server.
+7. The server stores or forwards only the encrypted packet.
+8. The receiver decrypts the AES key using their private key.
+9. The receiver then decrypts the message content.
+10. The receiver compares the computed hash with the received hash to confirm that the message was not altered.
+
+This process ensures that only the intended recipient can read the message and that any tampering can be detected.
+
+5. Security Features in the App
+The application includes several security features that support end-to-end encryption:
+
+1. AES-256-CBC for fast and secure message encryption.
+2. RSA-2048 for wrapping the symmetric key.
+3. SHA-256 for integrity verification.
+4. Local vault protection with a PIN-based access layer.
+5. Client-side encryption so the server never sees plaintext.
+6. Message verification tools that help users understand the encryption flow.
+
+These features work together to protect confidentiality and reduce the chance of unauthorized access.
+
+6. Security Insights Panel
+One of the useful parts of the application is the security insights panel. This panel visually explains how the message changes as it moves through the cryptographic pipeline. It shows:
+
+1. Plaintext before encryption.
+2. AES ciphertext after encryption.
+3. RSA key wrapping for secure key exchange.
+4. SHA-256 hashing for integrity.
+5. Authentication tag details.
+
+The panel is mainly educational, because it helps the user understand what happens behind the scenes when a message is sent.
+
+7. Group and Chat Management
+The application also supports group-based communication in addition to direct chat. Users can open shared conversations, manage members, and interact with the group security records. The interface is designed so that group conversations still follow the same encryption principles as direct messages, while maintaining secure key handling for the participants.
+
+8. File and Media Handling
+The app is not limited to text only. It also supports media-related communication such as files, voice messages, and other attachments depending on the enabled features. These items are handled in the same secure manner, with encryption applied before transmission so that the content remains protected during delivery.
+
+9. Why the App Is Secure
+The application is secure because encryption happens before the data leaves the sender's device. This prevents the server or any third party from reading the message content. The use of AES makes the encryption process efficient, while RSA ensures that the encryption key is shared safely. SHA-256 adds a verification layer so that any change to the data can be detected.
+
+In addition, the application avoids storing sensitive material in plain form. Private keys are protected locally, and the user needs proper authorization to access them. This makes the system more resistant to interception and unauthorized access.
+
+10. Summary
+In summary, this secure messaging application is designed to provide private communication using modern cryptographic techniques. From the user perspective, it works like a normal chat app, but behind the scenes it applies strong encryption and integrity checks to protect every message. The application serves both as a functional communication tool and as an educational example of how end-to-end encryption works in practice.
+
+As a student explaining the project, I would say that the app demonstrates how confidentiality, integrity, and secure key exchange can be achieved in one system. It shows that secure messaging is possible when encryption is performed correctly and when private keys are kept under the control of the user.
