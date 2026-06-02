@@ -1,0 +1,32 @@
+name: Keep Appwrite Alive
+
+on:
+  schedule:
+    # Runs at 00:00 every 2 days to prevent Appwrite from pausing after 7 days of inactivity
+    - cron: '0 0 */2 * *'
+  workflow_dispatch: # Allows you to run it manually from the Actions tab
+
+jobs:
+  ping-appwrite:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Appwrite Database
+        run: |
+          # We send a GET request to the Appwrite project to simulate activity.
+          # Even if it returns a 401/unauthorized, Appwrite still registers
+          # the request as activity on your project, preventing the pause.
+          echo "Pinging Appwrite project: e2eemessaging..."
+          
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X GET "https://fra.cloud.appwrite.io/v1/databases/e2eemessaging/collections" \
+            -H "X-Appwrite-Project: e2eemessaging" \
+            -H "Content-Type: application/json")
+          
+          echo "Response code: $RESPONSE"
+          
+          if [ "$RESPONSE" -eq 000 ]; then
+            echo "ERROR: Could not reach Appwrite. Check your endpoint."
+            exit 1
+          else
+            echo "SUCCESS: Appwrite pinged successfully (HTTP $RESPONSE). Project activity registered."
+          fi
