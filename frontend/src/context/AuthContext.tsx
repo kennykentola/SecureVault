@@ -265,7 +265,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 
     const loginEmail = async (email: string, pass: string) => {
+        try {
+            console.log("Checking for active session...");
+            await account.get();
+            // If we reach here, a session exists — delete it first
+            console.log("Active session found, clearing before re-login...");
+            await account.deleteSession('current');
+        } catch {
+            // No existing session — that's fine
+        }
+
+        console.log(`Attempting login for: ${email}`);
         await account.createEmailPasswordSession(email, pass);
+        // Small delay to let Appwrite propagate session cookie
+        await new Promise(resolve => setTimeout(resolve, 300));
         await checkSession();
     };
 
