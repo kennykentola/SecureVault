@@ -2307,38 +2307,38 @@ export const Dashboard: React.FC = () => {
 
                                     <div className="flex items-end gap-2 md:gap-4 bg-white/3 border border-white/10 rounded-4xl md:rounded-[3rem] p-2 md:p-3 pr-3 md:pr-5 focus-within:border-primary-500/50 focus-within:bg-white/5 transition-all shadow-3xl backdrop-blur-2xl">
                                         {false && (
-                                        <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
-                                            <input
-                                                type="file"
-                                                ref={fileInputRef}
-                                                className="hidden"
-                                                aria-label="Upload file"
-                                                title="Upload file"
-                                                onChange={(e) => {
-                                                    const file = e.target.files?.[0];
-                                                    if (file) handleMediaUpload(file, 'file');
-                                                    e.currentTarget.value = '';
-                                                }}
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => fileInputRef.current?.click()}
-                                                disabled={isVoiceUploading}
-                                                className={`p-3 md:p-4 hover:bg-white/10 rounded-full transition-colors text-slate-500 hover:text-white ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                aria-label="Attach file"
-                                                title="Attach file"
-                                            >
-                                                <Paperclip className="w-5 h-5 md:w-6 md:h-6" />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setShowGiphy(!showGiphy)}
-                                                disabled={isVoiceUploading}
-                                                className={`p-3 md:p-4 rounded-full transition-colors ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''} ${showGiphy ? 'bg-primary-600 text-white' : 'hover:bg-white/10 text-slate-500 hover:text-white'}`}
-                                                aria-label="Choose emoji or GIF"
-                                                title="Choose emoji or GIF"
-                                            ><Smile className="w-5 h-5 md:w-6 md:h-6" /></button>
-                                        </div>
+                                            <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
+                                                <input
+                                                    type="file"
+                                                    ref={fileInputRef}
+                                                    className="hidden"
+                                                    aria-label="Upload file"
+                                                    title="Upload file"
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) handleMediaUpload(file, 'file');
+                                                        e.currentTarget.value = '';
+                                                    }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    disabled={isVoiceUploading}
+                                                    className={`p-3 md:p-4 hover:bg-white/10 rounded-full transition-colors text-slate-500 hover:text-white ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                    aria-label="Attach file"
+                                                    title="Attach file"
+                                                >
+                                                    <Paperclip className="w-5 h-5 md:w-6 md:h-6" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowGiphy(!showGiphy)}
+                                                    disabled={isVoiceUploading}
+                                                    className={`p-3 md:p-4 rounded-full transition-colors ${isVoiceUploading ? 'opacity-50 cursor-not-allowed' : ''} ${showGiphy ? 'bg-primary-600 text-white' : 'hover:bg-white/10 text-slate-500 hover:text-white'}`}
+                                                    aria-label="Choose emoji or GIF"
+                                                    title="Choose emoji or GIF"
+                                                ><Smile className="w-5 h-5 md:w-6 md:h-6" /></button>
+                                            </div>
                                         )}
 
                                         <textarea
@@ -2470,7 +2470,7 @@ export const Dashboard: React.FC = () => {
                                     <div className="mt-12 grid grid-cols-3 gap-6 w-full max-w-2xl">
                                         {[
                                             { icon: <MessageCircle />, label: 'Chats', action: () => openFirstChat('user') },
-                                            { icon: <UsersIcon />, label: 'Groups', action: () => openFirstChat('group') },
+                                            // { icon: <UsersIcon />, label: 'Groups', action: () => openFirstChat('group') },
                                             { icon: <ShieldAlert />, label: 'Secure', action: () => setShowUnlockModal(true) }
                                         ].map((item, i) => (
                                             <button

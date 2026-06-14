@@ -16,6 +16,7 @@ __pycache__/
 backend/.env
 frontend/.env
 DEPLOYMENT_INFO.md
+INDEX.md
 
 # Build outputs
 dist/
@@ -34,3 +35,9 @@ yarn-error.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Documentation and presentation files
+.docs/*.mmd
+.docs/*.png
+.docs/*.txt
+.docs/securevault_presentation.md

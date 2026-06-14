@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import './crypto/benchmark.ts'
 
 const savedTheme = localStorage.getItem('app-theme') || 'light';
 if (!localStorage.getItem('app-theme')) {
